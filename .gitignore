@@ -1,0 +1,33 @@
+# Node dependencies & test build artifacts
+node_modules/
+extension/node_modules/
+extension/dist_test/
+
+# Python cache & test artifacts
+__pycache__/
+server/__pycache__/
+server/ai/__pycache__/
+server/models/__pycache__/
+server/routes/__pycache__/
+server/tests/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+env/
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+server/.env
+*.env
+.env.local
+.env.*.local
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

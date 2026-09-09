@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Computer Vision & Multi-Modal Perception Test Lab</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .cv-lab-header {
+            max-width: 1200px;
+            margin: 0 auto 2rem auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .back-btn {
+            background: #334155;
+            color: #ffffff;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #1e293b;
+        }
+
+        .cv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .cv-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .cv-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .cv-card-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .cv-tag {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tag-badge {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .tag-nda {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .tag-pet {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .tag-license {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .tag-form {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .tag-celeb {
+            background: #fce7f3;
+            color: #be185d;
+        }
+
+        .canvas-container {
+            width: 100%;
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #334155;
+        }
+
+        .cv-canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .cv-card-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .cv-meta-list {
+            list-style: none;
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            background: #f8fafc;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .cv-meta-list li strong {
+            color: #0f172a;
+        }
+
+        .form-demo-dom {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            font-size: 0.85rem;
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: #334155;
+        }
+
+        .form-val {
+            background: #ffffff;
+            padding: 0.2rem 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            color: #0f172a;
+            font-family: monospace;
+        }
+
+        .test-guide-section {
+            max-width: 1200px;
+            margin: 3rem auto 0 auto;
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            color: #ffffff;
+            padding: 2rem;
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .test-guide-section h2 {
+            font-size: 1.35rem;
+            margin-bottom: 1rem;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .test-queries-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .query-box {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .query-box h3 {
+            font-size: 0.95rem;
+            color: #93c5fd;
+            margin-bottom: 0.5rem;
+        }
+
+        .query-text {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: #a5f3fc;
+            display: block;
+            margin-bottom: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .query-expectation {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="cv-lab-header">
+        <div>
+            <h1>🔬 Computer Vision & Multi-Modal Perception Test Lab</h1>
+            <p style="color: var(--text-secondary); margin-top: 0.25rem;">
+                Tests Tier 1 (DOM) $\to$ Tier 2 (OCR Text) $\to$ Tier 3 (Local Computer Vision for Faces, Field Names vs
+                Values, Signatures & Pure Visual Identification).
+            </p>
+        </div>
+        <a href="index.html" class="back-btn" id="btn_back_directory">
+            <span>←</span> Back to Employee Directory
+        </a>
+    </header>
+
+    <main class="cv-grid">
+        <!-- Card 1: Filled Form (Field Names vs Filled Values) -->
+        <article class="cv-card" id="card_filled_form" aria-labelledby="title_form">
+            <div class="cv-card-header">
+                <h2 class="cv-card-title" id="title_form">1. Filled Membership Form</h2>
+                <span class="cv-tag tag-form">Field Labels vs PII Values</span>
+            </div>
+            <p class="cv-card-desc">
+                Contains form field names and filled PII values. Asking for field names returns the fields while
+                blurring/masking all personal values.
+            </p>
+            <div class="canvas-container">
+                <canvas id="form_canvas" width="400" height="270" class="cv-canvas"
+                    aria-label="Filled Membership Enrollment Application Form"></canvas>
+            </div>
+
+        </article>
+
+        <!-- Card 2: Pure Visual Celebrity Image (Zero Text) -->
+        <article class="cv-card" id="card_celebrity_portrait" aria-labelledby="title_celeb">
+            <div class="cv-card-header">
+                <h2 class="cv-card-title" id="title_celeb">2. Pure Visual Celebrity / Person Image</h2>
+                <span class="cv-tag tag-celeb">Zero-Text Face Recognition</span>
+            </div>
+            <p class="cv-card-desc">
+                Visual image placeholder (<strong>img2.png</strong>) containing a person/celebrity with zero text.
+                Asking "Who is this person?" identifies the face without blinding/blurring it out first.
+            </p>
+            <div class="canvas-container">
+                <img src="img2.png" id="img2"
+                    alt="Pure visual portrait of a person or celebrity with zero textual annotations" class="cv-canvas"
+                    style="max-width: 400px; max-height: 270px; object-fit: contain; display: block; border-radius: 6px;"
+                    crossorigin="anonymous">
+            </div>
+            <ul class="cv-meta-list">
+                <li><strong>Target Image:</strong> <code>img2.png</code> (Paste your celebrity image here into the
+                    project directory)</li>
+                <li><strong>Text on Image:</strong> None (0% textual data)</li>
+                <li><strong>Context Behavior:</strong> "Who is this person in the image?" $\to$ Identifies face;
+                    Non-identity task $\to$ Blurs face.</li>
+            </ul>
+        </article>
+
+        <!-- Card 3: Employee Security ID Badge -->
+        <article class="cv-card" id="card_security_badge" aria-labelledby="title_badge">
+            <div class="cv-card-header">
+                <h2 class="cv-card-title" id="title_badge">3. Security ID Badge</h2>
+                <span class="cv-tag tag-badge">Face + Signature + OCR</span>
+            </div>
+            <p class="cv-card-desc">
+                Contains employee portrait, handwritten signature, company header, and security badge ID.
+            </p>
+            <div class="canvas-container">
+                <canvas id="badge_canvas" width="400" height="250" class="cv-canvas"
+                    aria-label="Employee Security ID Badge for Vikram Sethi"></canvas>
+            </div>
+            <ul class="cv-meta-list">
+                <li><strong>Target Entity:</strong> Vikram Sethi (Staff Engineer)</li>
+                <li><strong>Badge ID (OCR):</strong> SEC-9082-ALPHA</li>
+                <li><strong>Sensitive Visual Data:</strong> Biometric Face + Executive Signature</li>
+            </ul>
+        </article>
+
+        <!-- Card 4: Confidential Scanned NDA -->
+        <article class="cv-card" id="card_nda_doc" aria-labelledby="title_nda">
+            <div class="cv-card-header">
+                <h2 class="cv-card-title" id="title_nda">4. Confidential Executive NDA</h2>
+                <span class="cv-tag tag-nda">Stamp + Signature</span>
+            </div>
+            <p class="cv-card-desc">
+                Scanned legal agreement with official red confidential watermark stamp and signee signature.
+            </p>
+            <div class="canvas-container">
+                <canvas id="doc_canvas" width="400" height="250" class="cv-canvas"
+                    aria-label="Confidential Non-Disclosure Agreement signed by Dr. Ananya Roy"></canvas>
+            </div>
+            <ul class="cv-meta-list">
+                <li><strong>Signee:</strong> Dr. Ananya Roy (VP of Research)</li>
+                <li><strong>Document Type:</strong> Non-Disclosure Agreement</li>
+                <li><strong>Sensitive Visual Data:</strong> Red Confidential Stamp + Signature</li>
+            </ul>
+        </article>
+
+        <!-- Card 5: Pet Registration & Medical Card (Animal vs Face) -->
+        <article class="cv-card" id="card_pet_reg" aria-labelledby="title_pet">
+            <div class="cv-card-header">
+                <h2 class="cv-card-title" id="title_pet">5. Pet Medical Certificate</h2>
+                <span class="cv-tag tag-pet">Animal vs Human Face</span>
+            </div>
+            <p class="cv-card-desc">
+                Animal visual content (dog) is non-sensitive; human owner face avatar is treated as sensitive.
+            </p>
+            <div class="canvas-container">
+                <canvas id="pet_canvas" width="400" height="250" class="cv-canvas"
+                    aria-label="Veterinary Certificate for Max the Golden Retriever and owner Siddharth Rao"></canvas>
+            </div>
+            <ul class="cv-meta-list">
+                <li><strong>Pet Name & Breed:</strong> Max (Golden Retriever)</li>
+                <li><strong>Owner Name:</strong> Siddharth Rao</li>
+                <li><strong>Microchip ID (OCR):</strong> CHIP-449102</li>
+            </ul>
+        </article>
+
+        <!-- Card 6: Digital Driver's License Mockup -->
+        <article class="cv-card" id="card_license_doc" aria-labelledby="title_license">
+            <div class="cv-card-header">
+                <h2 class="cv-card-title" id="title_license">6. State Driver's License</h2>
+                <span class="cv-tag tag-license">ID Document + Face</span>
+            </div>
+            <p class="cv-card-desc">
+                Official state identity card with driver portrait photo, license number, and signature.
+            </p>
+            <div class="canvas-container">
+                <canvas id="license_canvas" width="400" height="250" class="cv-canvas"
+                    aria-label="California Driver License for Priya Sharma"></canvas>
+            </div>
+            <ul class="cv-meta-list">
+                <li><strong>Cardholder:</strong> Priya Sharma</li>
+                <li><strong>License Number:</strong> DL-9823410-X</li>
+                <li><strong>Sensitive Visual Data:</strong> Driver Portrait + Signature</li>
+            </ul>
+        </article>
+    </main>
+
+    <section class="test-guide-section">
+        <h2>💡 Suggested Prompts to Test Context-Aware Computer Vision</h2>
+        <div class="test-queries-grid">
+            <div class="query-box">
+                <h3>1. Form Field Names vs Filled Values</h3>
+                <span class="query-text">What are all the fields present in the form?</span>
+                <p class="query-expectation">✅ Returns field names ("Full Name", "Date of Birth", "SSN", etc.); all
+                    filled PII values are masked and blurred.</p>
+            </div>
+            <div class="query-box">
+                <h3>2. Pure Visual Face / Celebrity Identification</h3>
+                <span class="query-text">Who is this person in the image?</span>
+                <p class="query-expectation">✅ Inspects visual pixels and identifies the celebrity / person visually
+                    without blinding the face before recognition.</p>
+            </div>
+            <div class="query-box">
+                <h3>3. Face Privacy on Non-Identity Task</h3>
+                <span class="query-text">What is the background color of the celebrity portrait?</span>
+                <p class="query-expectation">✅ Blurs the face as LOCAL_ONLY; returns background color (Dark Slate /
+                    Charcoal).</p>
+            </div>
+            <div class="query-box">
+                <h3>4. OCR Text Extraction & Redaction</h3>
+                <span class="query-text">What text is written on the security badge?</span>
+                <p class="query-expectation">✅ Extracts "ACME CORP - SECURE ACCESS" and "SEC-9082-ALPHA"; blurs portrait
+                    and signature.</p>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Draw realistic, crisp test canvas graphics on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            // 1. Form Canvas
+            const formCtx = document.getElementById('form_canvas').getContext('2d');
+            formCtx.fillStyle = '#ffffff';
+            formCtx.fillRect(0, 0, 400, 270);
+
+            // Form Header
+            formCtx.fillStyle = '#4c1d95';
+            formCtx.fillRect(0, 0, 400, 36);
+            formCtx.fillStyle = '#ffffff';
+            formCtx.font = 'bold 14px sans-serif';
+            formCtx.fillText('MEMBERSHIP ENROLLMENT APPLICATION', 15, 24);
+
+            // Form Rows (Labels + Filled Boxes)
+            const formFields = [
+                { label: 'Full Name:', value: 'Johnathan Doe', y: 60 },
+                { label: 'Date of Birth:', value: '1988-04-15', y: 90 },
+                { label: 'Social Security No:', value: '987-65-4321', y: 120 },
+                { label: 'Email Address:', value: 'john.doe@example.com', y: 150 },
+                { label: 'Phone Number:', value: '+1 (555) 019-2834', y: 180 },
+                { label: 'Home Address:', value: '742 Evergreen Terrace', y: 210 },
+                { label: 'Annual Income:', value: '$125,000', y: 240 }
+            ];
+
+            formCtx.font = 'bold 12px sans-serif';
+            for (const f of formFields) {
+                // Label (Non-sensitive Field Name)
+                formCtx.fillStyle = '#334155';
+                formCtx.fillText(f.label, 15, f.y);
+
+                // Value Box (Sensitive PII)
+                formCtx.fillStyle = '#f1f5f9';
+                formCtx.fillRect(160, f.y - 14, 225, 20);
+                formCtx.strokeStyle = '#cbd5e1';
+                formCtx.strokeRect(160, f.y - 14, 225, 20);
+                formCtx.fillStyle = '#0f172a';
+                formCtx.font = '12px monospace';
+                formCtx.fillText(f.value, 168, f.y);
+                formCtx.font = 'bold 12px sans-serif';
+            }
+
+            // 2. Badge Canvas
+            const badgeCtx = document.getElementById('badge_canvas').getContext('2d');
+            badgeCtx.fillStyle = '#f1f5f9';
+            badgeCtx.fillRect(0, 0, 400, 250);
+
+            badgeCtx.fillStyle = '#1e3a8a';
+            badgeCtx.fillRect(0, 0, 400, 45);
+            badgeCtx.fillStyle = '#ffffff';
+            badgeCtx.font = 'bold 16px sans-serif';
+            badgeCtx.fillText('ACME CORP - SECURE ACCESS', 20, 28);
+
+            badgeCtx.fillStyle = '#cbd5e1';
+            badgeCtx.fillRect(25, 65, 110, 130);
+            badgeCtx.fillStyle = '#3b82f6';
+            badgeCtx.beginPath();
+            badgeCtx.arc(80, 115, 32, 0, Math.PI * 2);
+            badgeCtx.fill();
+            badgeCtx.beginPath();
+            badgeCtx.arc(80, 175, 45, Math.PI, 0);
+            badgeCtx.fill();
+
+            badgeCtx.fillStyle = '#0f172a';
+            badgeCtx.font = 'bold 18px sans-serif';
+            badgeCtx.fillText('Vikram Sethi', 155, 95);
+            badgeCtx.font = '13px sans-serif';
+            badgeCtx.fillStyle = '#475569';
+            badgeCtx.fillText('Role: Staff Security Engineer', 155, 120);
+            badgeCtx.fillText('Dept: Cloud Infrastructure', 155, 140);
+            badgeCtx.font = 'bold 13px monospace';
+            badgeCtx.fillStyle = '#0369a1';
+            badgeCtx.fillText('ID: SEC-9082-ALPHA', 155, 170);
+
+            badgeCtx.strokeStyle = '#94a3b8';
+            badgeCtx.strokeRect(155, 185, 220, 45);
+            badgeCtx.font = 'italic 18px cursive, sans-serif';
+            badgeCtx.fillStyle = '#1e293b';
+            badgeCtx.fillText('V. Sethi', 180, 215);
+
+            // 4. NDA Document Canvas
+            const docCtx = document.getElementById('doc_canvas').getContext('2d');
+            docCtx.fillStyle = '#ffffff';
+            docCtx.fillRect(0, 0, 400, 250);
+
+            docCtx.fillStyle = '#0f172a';
+            docCtx.font = 'bold 16px sans-serif';
+            docCtx.fillText('NON-DISCLOSURE AGREEMENT', 60, 35);
+
+            docCtx.save();
+            docCtx.translate(280, 45);
+            docCtx.rotate(-0.15);
+            docCtx.strokeStyle = '#dc2626';
+            docCtx.lineWidth = 2;
+            docCtx.strokeRect(0, 0, 105, 28);
+            docCtx.fillStyle = '#dc2626';
+            docCtx.font = 'bold 12px sans-serif';
+            docCtx.fillText('CONFIDENTIAL', 8, 20);
+            docCtx.restore();
+
+            docCtx.fillStyle = '#334155';
+            docCtx.font = '12px sans-serif';
+            docCtx.fillText('Party A agrees to maintain strict confidentiality of proprietary data.', 25, 75);
+            docCtx.fillText('All disclosures shall remain secret for a duration of 5 years.', 25, 95);
+            docCtx.fillText('Authorized Signatory: Dr. Ananya Roy (VP Research)', 25, 125);
+
+            docCtx.strokeStyle = '#64748b';
+            docCtx.beginPath();
+            docCtx.moveTo(25, 180);
+            docCtx.lineTo(240, 180);
+            docCtx.stroke();
+            docCtx.font = 'italic 20px cursive, sans-serif';
+            docCtx.fillStyle = '#0f172a';
+            docCtx.fillText('Ananya Roy', 45, 170);
+            docCtx.font = '11px sans-serif';
+            docCtx.fillStyle = '#64748b';
+            docCtx.fillText('Authorized Signature', 25, 198);
+
+            // 5. Pet Registration Canvas
+            const petCtx = document.getElementById('pet_canvas').getContext('2d');
+            petCtx.fillStyle = '#f0fdf4';
+            petCtx.fillRect(0, 0, 400, 250);
+
+            petCtx.fillStyle = '#15803d';
+            petCtx.fillRect(0, 0, 400, 40);
+            petCtx.fillStyle = '#ffffff';
+            petCtx.font = 'bold 15px sans-serif';
+            petCtx.fillText('NATIONAL VETERINARY PET REGISTRY', 20, 26);
+
+            petCtx.fillStyle = '#d97706';
+            petCtx.beginPath();
+            petCtx.arc(75, 110, 35, 0, Math.PI * 2);
+            petCtx.fill();
+            petCtx.beginPath();
+            petCtx.ellipse(50, 90, 10, 20, Math.PI / 4, 0, Math.PI * 2);
+            petCtx.ellipse(100, 90, 10, 20, -Math.PI / 4, 0, Math.PI * 2);
+            petCtx.fill();
+
+            petCtx.fillStyle = '#cbd5e1';
+            petCtx.fillRect(25, 160, 60, 65);
+            petCtx.fillStyle = '#475569';
+            petCtx.beginPath();
+            petCtx.arc(55, 185, 16, 0, Math.PI * 2);
+            petCtx.fill();
+
+            petCtx.fillStyle = '#0f172a';
+            petCtx.font = 'bold 17px sans-serif';
+            petCtx.fillText('Pet: Max (Golden Retriever)', 140, 85);
+            petCtx.font = '13px sans-serif';
+            petCtx.fillStyle = '#334155';
+            petCtx.fillText('Owner: Siddharth Rao', 140, 115);
+            petCtx.fillText('Species: Canine | Age: 3 Years', 140, 140);
+            petCtx.font = 'bold 13px monospace';
+            petCtx.fillStyle = '#15803d';
+            petCtx.fillText('Microchip: CHIP-449102', 140, 175);
+            petCtx.font = '11px sans-serif';
+            petCtx.fillStyle = '#64748b';
+            petCtx.fillText('Status: Vaccinated & Registered', 140, 205);
+
+            // 6. Driver License Canvas
+            const licCtx = document.getElementById('license_canvas').getContext('2d');
+            licCtx.fillStyle = '#f8fafc';
+            licCtx.fillRect(0, 0, 400, 250);
+
+            licCtx.fillStyle = '#b45309';
+            licCtx.fillRect(0, 0, 400, 42);
+            licCtx.fillStyle = '#ffffff';
+            licCtx.font = 'bold 15px sans-serif';
+            licCtx.fillText('CALIFORNIA DRIVER LICENSE', 20, 27);
+
+            licCtx.fillStyle = '#e2e8f0';
+            licCtx.fillRect(25, 60, 95, 115);
+            licCtx.fillStyle = '#dc2626';
+            licCtx.beginPath();
+            licCtx.arc(72, 105, 26, 0, Math.PI * 2);
+            licCtx.fill();
+            licCtx.beginPath();
+            licCtx.arc(72, 155, 38, Math.PI, 0);
+            licCtx.fill();
+
+            licCtx.fillStyle = '#0f172a';
+            licCtx.font = 'bold 15px monospace';
+            licCtx.fillText('DL: DL-9823410-X', 140, 80);
+            licCtx.font = 'bold 16px sans-serif';
+            licCtx.fillText('Priya Sharma', 140, 105);
+            licCtx.font = '12px sans-serif';
+            licCtx.fillStyle = '#475569';
+            licCtx.fillText('DOB: 04/12/1992 | Class: C', 140, 130);
+            licCtx.fillText('EXP: 04/12/2028 | Sex: F', 140, 150);
+
+            licCtx.font = 'italic 16px cursive, sans-serif';
+            licCtx.fillStyle = '#0f172a';
+            licCtx.fillText('Priya Sharma', 140, 195);
+            licCtx.strokeStyle = '#94a3b8';
+            licCtx.strokeRect(135, 175, 160, 30);
+        });
+    </script>
+</body>
+
+</html>

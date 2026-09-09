@@ -1,0 +1,230 @@
+:root {
+    --primary-color: #0f172a;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --border-color: #e2e8f0;
+    --accent-color: #2563eb;
+    --accent-hover: #1d4ed8;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 2rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+h1 {
+    color: var(--primary-color);
+}
+
+.directory-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.employee-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.employee-card:hover {
+    transform: translateY(-5px);
+}
+
+.photo-container {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 1rem;
+}
+
+.profile-photo {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--border-color);
+}
+
+.employee-info {
+    width: 100%;
+}
+
+.employee-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.employee-title {
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+.contact-info {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    text-align: left;
+    background: #f1f5f9;
+    padding: 0.75rem;
+    border-radius: 8px;
+    width: 100%;
+}
+
+.contact-info p {
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.contact-info p:last-child {
+    margin-bottom: 0;
+}
+
+.contact-info a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.contact-info a:hover {
+    text-decoration: underline;
+}
+
+.view-profile-btn {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.view-profile-btn:hover {
+    background-color: var(--accent-hover);
+}
+
+.profile-details {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--card-bg);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: left;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 10;
+}
+
+.profile-details.visible {
+    transform: translateY(0);
+}
+
+.profile-details h3 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.profile-details p {
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.close-profile-btn {
+    margin-top: auto;
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.close-profile-btn:hover {
+    background-color: #f1f5f9;
+}
+
+.hidden {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.visible {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Badge Section */
+.badge-section { grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; }
+.badge-header { margin-bottom: 14px; }
+.badge-header h3 { font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0 0 4px 0; }
+.badge-subtitle { font-size: 0.8rem; color: #64748b; margin: 0; }
+.badge-canvas-wrapper { position: relative; display: inline-block; margin-bottom: 16px; }
+#badge_canvas { display: block; border: 2px solid #0284c7; border-radius: 8px; background: #fff; max-width: 100%; }
+.reset-badge-btn { position: absolute; top: 8px; right: 8px; padding: 3px 10px; font-size: 0.75rem; background: rgba(255,255,255,0.92); border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; color: #475569; transition: background 0.15s; }
+.reset-badge-btn:hover { background: #fff; color: #0f172a; border-color: #94a3b8; }
+
+/* Upload Zone */
+.image-upload-zone { border: 2px dashed #94a3b8; border-radius: 10px; padding: 24px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: #fff; user-select: none; }
+.image-upload-zone:hover, .image-upload-zone:focus { border-color: #2563eb; background: #eff6ff; outline: none; }
+.image-upload-zone.drag-over { border-color: #2563eb; background: #dbeafe; }
+.upload-zone-inner { pointer-events: none; }
+.image-upload-zone label { pointer-events: auto; }
+.upload-icon { display: block; font-size: 2rem; margin-bottom: 8px; }
+.upload-main-text { font-size: 0.95rem; font-weight: 600; color: #1e293b; margin: 0 0 4px 0; }
+.upload-sub-text { font-size: 0.85rem; color: #64748b; margin: 0 0 10px 0; }
+.upload-browse-label { color: #2563eb; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.upload-browse-label:hover { color: #1d4ed8; }
+.upload-hint { font-size: 0.75rem; color: #94a3b8; margin: 0; line-height: 1.5; }
+.upload-file-input { display: none; }
+.upload-feedback { margin-top: 10px; padding: 8px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; }
+.upload-feedback--success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.upload-feedback--error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+/* OCR Target Image Section */
+.ocr-image-section { grid-column: 1 / -1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; }
+.ocr-image-header { margin-bottom: 16px; }
+.ocr-image-title { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; }
+.ocr-image-subtitle { font-size: 0.83rem; color: #64748b; margin: 0; line-height: 1.5; }
+.ocr-image-wrapper { display: inline-block; border: 2px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-bottom: 12px; background: #fff; }
+.ocr-target-image { display: block; max-width: 100%; height: auto; }
+.ocr-image-hint { font-size: 0.82rem; color: #475569; margin: 0; }
+.ocr-image-hint em { font-style: italic; color: #2563eb; }

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Directory</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto 1.5rem auto; flex-wrap: wrap; gap: 1rem;">
+            <h1>Company Employee Directory</h1>
+            <a href="cv_test.html" id="btn_nav_cv_test" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; padding: 0.75rem 1.25rem; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35); transition: transform 0.2s, box-shadow 0.2s;">
+                <span>🔬</span> Open Computer Vision & Multi-Modal Perception Test Lab →
+            </a>
+        </div>
+    </header>
+
+    <main class="directory-container" aria-label="Employee Directory">
+        <!-- Rahul Sharma -->
+        <article class="employee-card" id="employee_rahul" aria-labelledby="name_rahul">
+            <div class="photo-container">
+                <img src="https://ui-avatars.com/api/?name=Rahul+Sharma&background=0D8ABC&color=fff&size=128" alt="Profile photo of Rahul Sharma" class="profile-photo" id="photo_rahul" crossorigin="anonymous">
+            </div>
+            <div class="employee-info">
+                <h2 class="employee-name" id="name_rahul">Rahul Sharma</h2>
+                <p class="employee-title" id="title_rahul">Software Engineer</p>
+                <div class="contact-info">
+                    <p>📧 <a href="mailto:rahul.sharma@example.com" class="employee-email" id="email_rahul" aria-label="Email Rahul Sharma">rahul.sharma@example.com</a></p>
+                    <p>📞 <span class="employee-phone" id="phone_rahul" aria-label="Phone number for Rahul Sharma">+91 9876543210</span></p>
+                </div>
+                <button class="view-profile-btn" aria-controls="profile_rahul" data-target="rahul" aria-label="View profile of Rahul Sharma">View Profile</button>
+            </div>
+            <section class="profile-details hidden" id="profile_rahul" aria-hidden="true" tabindex="-1">
+                <h3>Detailed Profile</h3>
+                <p><strong>Department:</strong> Engineering</p>
+                <p><strong>Location:</strong> Bangalore, India</p>
+                <p><strong>Bio:</strong> Rahul is a senior software engineer specializing in frontend architecture and privacy-preserving systems.</p>
+                <button class="close-profile-btn" aria-label="Close profile">Close</button>
+            </section>
+        </article>
+
+        <!-- Priya Nair -->
+        <article class="employee-card" id="employee_priya" aria-labelledby="name_priya">
+            <div class="photo-container">
+                <img src="https://ui-avatars.com/api/?name=Priya+Nair&background=EA4335&color=fff&size=128" alt="Profile photo of Priya Nair" class="profile-photo" id="photo_priya" crossorigin="anonymous">
+            </div>
+            <div class="employee-info">
+                <h2 class="employee-name" id="name_priya">Priya Nair</h2>
+                <p class="employee-title" id="title_priya">UI/UX Designer</p>
+                <div class="contact-info">
+                    <p>📧 <a href="mailto:priya.nair@example.com" class="employee-email" id="email_priya" aria-label="Email Priya Nair">priya.nair@example.com</a></p>
+                    <p>📞 <span class="employee-phone" id="phone_priya" aria-label="Phone number for Priya Nair">+91 9123456780</span></p>
+                </div>
+                <button class="view-profile-btn" aria-controls="profile_priya" data-target="priya" aria-label="View profile of Priya Nair">View Profile</button>
+            </div>
+            <section class="profile-details hidden" id="profile_priya" aria-hidden="true" tabindex="-1">
+                <h3>Detailed Profile</h3>
+                <p><strong>Department:</strong> Design</p>
+                <p><strong>Location:</strong> Mumbai, India</p>
+                <p><strong>Bio:</strong> Priya crafts beautiful, accessible, and user-centric interfaces.</p>
+                <button class="close-profile-btn" aria-label="Close profile">Close</button>
+            </section>
+        </article>
+
+        <!-- Arjun Kumar -->
+        <article class="employee-card" id="employee_arjun" aria-labelledby="name_arjun">
+            <div class="photo-container">
+                <img src="https://ui-avatars.com/api/?name=Arjun+Kumar&background=34A853&color=fff&size=128" alt="Profile photo of Arjun Kumar" class="profile-photo" id="photo_arjun" crossorigin="anonymous">
+            </div>
+            <div class="employee-info">
+                <h2 class="employee-name" id="name_arjun">Arjun Kumar</h2>
+                <p class="employee-title" id="title_arjun">Data Analyst</p>
+                <div class="contact-info">
+                    <p>📧 <a href="mailto:arjun.kumar@example.com" class="employee-email" id="email_arjun" aria-label="Email Arjun Kumar">arjun.kumar@example.com</a></p>
+                    <p>📞 <span class="employee-phone" id="phone_arjun" aria-label="Phone number for Arjun Kumar">+91 9988776655</span></p>
+                </div>
+                <button class="view-profile-btn" aria-controls="profile_arjun" data-target="arjun" aria-label="View profile of Arjun Kumar">View Profile</button>
+            </div>
+            <section class="profile-details hidden" id="profile_arjun" aria-hidden="true" tabindex="-1">
+                <h3>Detailed Profile</h3>
+                <p><strong>Department:</strong> Analytics</p>
+                <p><strong>Location:</strong> Delhi, India</p>
+                <p><strong>Bio:</strong> Arjun leverages data to uncover actionable insights for product development.</p>
+                <button class="close-profile-btn" aria-label="Close profile">Close</button>
+            </section>
+        </article>
+
+        <!-- OCR Test Image — img1.png is an actual image file, not DOM text -->
+        <!-- The DOM extractor will NOT see the text inside it.              -->
+        <!-- The OCR engine will scan it using Tesseract.js locally.         -->
+        <section class="ocr-image-section" style="grid-column: 1 / -1;">
+            <div class="ocr-image-header">
+                <h2 class="ocr-image-title">📄 OCR Target Image</h2>
+                <p class="ocr-image-subtitle">
+                    Text below exists only as <strong>pixels inside an image</strong> — invisible to the DOM.
+                    The agent's OCR engine reads it locally using Tesseract.js.
+                </p>
+            </div>
+            <div class="ocr-image-wrapper">
+                <img
+                    src="img1.png"
+                    id="img1"
+                    alt="OCR test image containing personal information as visual text"
+                    class="ocr-target-image"
+                    crossorigin="anonymous"
+                >
+            </div>
+            <p class="ocr-image-hint">
+                💡 Try asking: <em>"What text is written in this image?"</em> or <em>"What is the acknowledgement number in the image?"</em>
+            </p>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
