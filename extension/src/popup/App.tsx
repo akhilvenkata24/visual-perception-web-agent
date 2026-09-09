@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
-import { PrivacyDebugPanel, PageModelSummaryProps, PipelineMetrics } from './components/PrivacyDebugPanel';
+import { PopupHeader } from './components/PopupHeader';
+import { EmptyStateView } from './components/EmptyStateView';
+import { LiveMissionControl } from './components/LiveMissionControl';
+import { FloatingInputBox } from './components/FloatingInputBox';
 import { TaskHistoryDrawer } from './components/TaskHistoryDrawer';
+import { PageModelSummaryProps, PipelineMetrics } from './components/PrivacyDebugPanel';
 import { PrivacyDecision } from '../privacy/policyEngine';
 import { SanitizedContext } from '../privacy/redactor';
 import { FirewallResult } from '../agent/actionFirewall';
 import { ExecutionResult } from '../content/actionExecutor';
+import { OrbState } from './components/ThreeOrbCanvas';
 import {
   saveActiveState,
   loadActiveState,
@@ -18,6 +23,7 @@ import {
 function App() {
   const [task, setTask] = useState('');
   const [status, setStatus] = useState('Ready');
+  const [isWorking, setIsWorking] = useState(false);
   const [summary, setSummary] = useState<PageModelSummaryProps | null>(null);
   const [decisions, setDecisions] = useState<PrivacyDecision[]>([]);
   const [sanitizedContext, setSanitizedContext] = useState<SanitizedContext | undefined>(undefined);
@@ -31,8 +37,26 @@ function App() {
   const [steps, setSteps] = useState<any[] | undefined>(undefined);
   const [history, setHistory] = useState<TaskHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  // Restore previous active session & history when opening popup
+  // Determine current AI Orb State
+  const getOrbState = (): OrbState => {
+    if (isWorking) {
+      if (task.toLowerCase().includes('screen') || task.toLowerCase().includes('image') || task.toLowerCase().includes('form')) {
+        return 'analyzing';
+      }
+      return 'working';
+    }
+    if (status.includes('Completed') || status.includes('Successfully') || !!finalAnswer) {
+      return 'complete';
+    }
+    if (status.includes('Paused')) {
+      return 'paused';
+    }
+    return 'ready';
+  };
+
+  // Restore session state on mount
   useEffect(() => {
     async function restoreSession() {
       try {
@@ -61,10 +85,16 @@ function App() {
     restoreSession();
   }, []);
 
-  const handleRunTask = async () => {
-    if (!task.trim()) return;
-    
-    setStatus('Evaluating Privacy Policy & Contacting Backend...');
+  const handleRunTaskWithPrompt = async (promptToRun?: string) => {
+    const taskQuery = promptToRun || task;
+    if (!taskQuery.trim() || isWorking) return;
+
+    if (promptToRun) {
+      setTask(promptToRun);
+    }
+
+    setIsWorking(true);
+    setStatus('Evaluating Privacy Policy & Synthesizing Webpage...');
     setSummary(null);
     setDecisions([]);
     setSanitizedContext(undefined);
@@ -79,9 +109,10 @@ function App() {
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
+
       if (!tab?.id) {
         setStatus('Unable to access active browser tab.');
+        setIsWorking(false);
         return;
       }
 
@@ -98,6 +129,7 @@ function App() {
 
       if (isRestrictedUrl) {
         setStatus(`Cannot run on internal browser pages (${tabUrl.split('/')[2] || 'chrome://'}). Please navigate to any web page (e.g. http://localhost:8080/cv_test.html or any website).`);
+        setIsWorking(false);
         return;
       }
 
@@ -105,7 +137,7 @@ function App() {
       try {
         response = await chrome.tabs.sendMessage(tab.id, {
           type: 'RUN_TASK',
-          task: task
+          task: taskQuery,
         });
       } catch (sendErr: any) {
         console.warn('Initial message send failed, attempting dynamic content script injection...', sendErr);
@@ -113,7 +145,7 @@ function App() {
           const manifest = chrome.runtime.getManifest();
           const contentScripts = manifest.content_scripts?.[0]?.js;
           if (contentScripts && contentScripts.length > 0 && tab.id) {
-            setStatus('Connecting agent to active web page...');
+            setStatus('Connecting WebPilot to active web page...');
             await chrome.scripting.executeScript({
               target: { tabId: tab.id },
               files: contentScripts,
@@ -121,7 +153,7 @@ function App() {
             await new Promise((resolve) => setTimeout(resolve, 300));
             response = await chrome.tabs.sendMessage(tab.id, {
               type: 'RUN_TASK',
-              task: task
+              task: taskQuery,
             });
           }
         } catch (injectErr: any) {
@@ -130,7 +162,8 @@ function App() {
       }
 
       if (!response) {
-        setStatus('Unable to connect to page. Please refresh this tab (F5 / Ctrl+R) to connect the agent.');
+        setStatus('Unable to connect to page. Please refresh this tab (F5 / Ctrl+R) to connect WebPilot.');
+        setIsWorking(false);
         return;
       }
 
@@ -140,7 +173,7 @@ function App() {
           : response.firewallResult?.allowed
           ? 'Firewall Approved'
           : 'Firewall Denied';
-          
+
         const finalStatusStr = `Task Completed: ${actionStatus}`;
         setStatus(finalStatusStr);
         setSummary(response.pageModelSummary);
@@ -155,9 +188,8 @@ function App() {
         setFinalAnswer(response.finalAnswer);
         setSteps(response.steps);
 
-        // Persist completed task to storage & history
         const sessionData = {
-          task,
+          task: taskQuery,
           status: finalStatusStr,
           summary: response.pageModelSummary,
           decisions: response.privacyDecisions || [],
@@ -185,7 +217,7 @@ function App() {
         setOcrResult(response.ocrResult);
 
         const sessionData = {
-          task,
+          task: taskQuery,
           status: errStatus,
           summary: response.pageModelSummary,
           decisions: response.privacyDecisions || [],
@@ -203,6 +235,21 @@ function App() {
     } catch (error: any) {
       console.error(error);
       setStatus('Unable to access page. Please refresh this tab (F5) and try again.');
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleTakeControl = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await chrome.tabs.sendMessage(tab.id, { type: 'TAKE_CONTROL' });
+      }
+      setStatus('Agent Paused. You are in control.');
+      setIsWorking(false);
+    } catch (e) {
+      console.warn('Take control error:', e);
     }
   };
 
@@ -221,38 +268,12 @@ function App() {
     setFinalAnswer(item.finalAnswer);
     setSteps(item.steps);
     setShowHistory(false);
-
-    await saveActiveState({
-      task: item.task,
-      status: item.status,
-      summary: item.summary || null,
-      decisions: item.decisions || [],
-      sanitizedContext: item.sanitizedContext,
-      sanitizedImages: item.sanitizedImages,
-      ocrResult: item.ocrResult,
-      agentPlanResponse: item.agentPlanResponse,
-      firewallResult: item.firewallResult,
-      executionResult: item.executionResult || null,
-      metrics: item.metrics,
-      finalAnswer: item.finalAnswer,
-      steps: item.steps,
-      timestamp: item.timestamp,
-    });
   };
 
-  const handleDeleteHistoryItem = async (id: string) => {
-    const updated = await deleteTaskHistoryItem(id);
-    setHistory(updated);
-  };
-
-  const handleClearHistory = async () => {
-    await clearTaskHistory();
-    setHistory([]);
-  };
-
-  const handleNewTask = async () => {
+  const handleNewTask = () => {
     setTask('');
     setStatus('Ready');
+    setIsWorking(false);
     setSummary(null);
     setDecisions([]);
     setSanitizedContext(undefined);
@@ -267,78 +288,70 @@ function App() {
     setShowHistory(false);
   };
 
+  const hasActiveContent = !!(summary || finalAnswer || isWorking || (status !== 'Ready' && task));
+
   return (
-    <div className="popup-container">
-      <div className="popup-header-bar">
-        <h2>Privacy Browser Agent</h2>
-        <div className="header-actions">
-          <button
-            className={`btn-history-toggle ${showHistory ? 'active' : ''}`}
-            onClick={() => setShowHistory(!showHistory)}
-            title="View past tasks history"
-          >
-            🕒 History {history.length > 0 && <span className="history-count-badge">{history.length}</span>}
-          </button>
-          {(summary || task) && (
-            <button className="btn-new-task" onClick={handleNewTask} title="Start new task">
-              ✨ New
-            </button>
-          )}
-        </div>
-      </div>
+    <div className={`webpilot-spatial-app theme-${theme}`}>
+      <div className="spatial-noise-bg"></div>
 
-      {showHistory ? (
-        <TaskHistoryDrawer
-          history={history}
-          onSelectHistoryItem={handleSelectHistoryItem}
-          onDeleteHistoryItem={handleDeleteHistoryItem}
-          onClearHistory={handleClearHistory}
-          onClose={() => setShowHistory(false)}
+      <PopupHeader
+        orbState={getOrbState()}
+        onOpenHistory={() => setShowHistory(!showHistory)}
+        historyCount={history.length}
+        onNewTask={handleNewTask}
+        hasActiveTask={hasActiveContent}
+        theme={theme}
+        onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+      />
+
+      <main className="webpilot-main-scroll">
+        {showHistory ? (
+          <TaskHistoryDrawer
+            history={history}
+            onSelectHistoryItem={handleSelectHistoryItem}
+            onDeleteHistoryItem={async (id) => {
+              const updated = await deleteTaskHistoryItem(id);
+              setHistory(updated);
+            }}
+            onClearHistory={async () => {
+              await clearTaskHistory();
+              setHistory([]);
+            }}
+            onClose={() => setShowHistory(false)}
+          />
+        ) : hasActiveContent ? (
+          <LiveMissionControl
+            task={task}
+            status={status}
+            isWorking={isWorking}
+            summary={summary}
+            decisions={decisions}
+            sanitizedContext={sanitizedContext}
+            sanitizedImages={sanitizedImages}
+            ocrResult={ocrResult}
+            agentPlanResponse={agentPlanResponse}
+            firewallResult={firewallResult}
+            executionResult={executionResult}
+            metrics={metrics}
+            finalAnswer={finalAnswer}
+            steps={steps}
+            onTakeControl={handleTakeControl}
+            onRetry={() => handleRunTaskWithPrompt(task)}
+          />
+        ) : (
+          <EmptyStateView onSelectSuggestion={(sugPrompt) => handleRunTaskWithPrompt(sugPrompt)} />
+        )}
+      </main>
+
+      <footer className="webpilot-footer-dock">
+        <FloatingInputBox
+          value={task}
+          onChange={setTask}
+          onSubmit={() => handleRunTaskWithPrompt()}
+          isWorking={isWorking}
+          onCaptureScreenshot={() => handleRunTaskWithPrompt('what can you see on the screen')}
         />
-      ) : (
-        <>
-          <div className="input-group">
-            <label htmlFor="task-input">What should I do?</label>
-            <textarea
-              id="task-input"
-              value={task}
-              onChange={(e) => setTask(e.target.value)}
-              placeholder="Open Rahul's profile and tell me his bio"
-              rows={3}
-            />
-          </div>
-
-          <button onClick={handleRunTask} disabled={!task.trim()}>
-            Run Task
-          </button>
-
-          {summary && decisions ? (
-            <PrivacyDebugPanel
-              task={task}
-              summary={summary}
-              decisions={decisions}
-              sanitizedContext={sanitizedContext}
-              sanitizedImages={sanitizedImages}
-              ocrResult={ocrResult}
-              agentPlanResponse={agentPlanResponse}
-              firewallResult={firewallResult}
-              executionResult={executionResult}
-              metrics={metrics}
-              finalAnswer={finalAnswer}
-              steps={steps}
-            />
-          ) : (
-            <div className="empty-state">
-              <div className="empty-title">Ready</div>
-              <div className="empty-sub">No perception data available yet. Run a task above.</div>
-            </div>
-          )}
-
-          <div className="status-bar">
-            Status: <span className="status-text">{status}</span>
-          </div>
-        </>
-      )}
+      </footer>
     </div>
   );
 }

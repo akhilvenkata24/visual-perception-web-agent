@@ -1,12 +1,21 @@
-// Phase 9 & 16: Autonomous Multi-Step Content Script Integration
-// Orchestrates the complete end-to-end agent loop:
+// Phase 9, 16 & 30: Autonomous Multi-Step Content Script Integration
+// Orchestrates the complete end-to-end agent loop + Holographic In-Page Webpage Visualizer:
 // Local Perception (DOM + OCR + Vision) -> PII Detector -> Privacy Policy -> Redactor -> FastAPI/Gemini -> Action Firewall -> Safe Executor -> Re-Perception -> Final Answer
 
 import { runAutonomousAgentLoop } from '../agent/agentLoop';
+import { visualizer } from './webpageVisualizer';
+import { resolveDOMElement } from './actionExecutor';
+import './webpageVisualizer.css';
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'RUN_TASK') {
-    console.log('🚀 [E2E Pipeline] Multi-Step Task received:', message.task);
+    console.log('🚀 [WebPilot AI] Multi-Step Task received:', message.task);
+
+    // 1. Activate in-page futuristic glow & floating badge
+    visualizer.setActive(true, 'OBSERVING');
+    if (message.task.toLowerCase().includes('screen') || message.task.toLowerCase().includes('image') || message.task.toLowerCase().includes('form')) {
+      visualizer.startScan('ANALYZING', 1400);
+    }
 
     (async () => {
       try {
@@ -16,6 +25,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
 
         const lastStep = loopResult.lastStep;
+
+        // If an element was interacted with, highlight it in-situ with holographic brackets
+        if (lastStep?.firewallResult?.action?.element_id && lastStep?.pageModel) {
+          visualizer.updateBadge('ACTING');
+          const targetEl = resolveDOMElement(lastStep.firewallResult.action.element_id, lastStep.pageModel);
+          if (targetEl && targetEl instanceof HTMLElement) {
+            visualizer.highlightTarget(targetEl, lastStep.firewallResult.action.element_id);
+          }
+        }
+
+        // Complete state
+        visualizer.updateBadge('COMPLETE');
+        setTimeout(() => {
+          visualizer.setActive(false);
+        }, 4000);
 
         sendResponse({
           status: loopResult.status,
@@ -52,6 +76,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
       } catch (err: any) {
         console.error('🚨 [Agent Loop Error]', err);
+        visualizer.setActive(false);
         sendResponse({
           status: 'ERROR',
           task: message.task,
@@ -61,5 +86,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })();
 
     return true; // Keep message channel open for async response
+  } else if (message.type === 'TAKE_CONTROL') {
+    visualizer.updateBadge('PAUSED');
+    sendResponse({ status: 'PAUSED' });
   }
 });
