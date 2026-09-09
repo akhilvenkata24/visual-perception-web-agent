@@ -366,3 +366,21 @@
     - Preserves fast modality skipping on structured DOM action tasks.
 - **Unit Testing**: All **62/62 extension unit tests** and **9/9 backend pytest tests** pass 100% cleanly.
 - **Result**: Production bundle compiled in `dist/assets/content.ts-BalHc4xk.js` and `dist/assets/index.html-Cl_ssjFR.js`.
+
+## Phase 29: Persistent Session State & Interactive Task History
+- **Date**: 2026-09-10
+- **Action**: Implemented permanent storage persistence and interactive Task History drawer across extension popup close and reopen sessions.
+- **Key Capabilities**:
+  - **History & Session Storage Manager (`historyManager.ts`)**:
+    - Saves and automatically restores active task prompt, status, perception summary, privacy decisions, sanitized context, blurred/unblurred viewport preview, and final answer.
+    - Maintains up to 30 chronological historical task execution sessions with status badges, timestamps, and answers.
+    - Unified storage adapter supporting `chrome.storage.local` with `localStorage` and in-memory fallbacks for unit tests.
+  - **Task History Drawer UI (`TaskHistoryDrawer.tsx` & `popup.css`)**:
+    - Collapsible drawer toggled via `🕒 History (N)` button in the header bar.
+    - Displays chronological cards with status badges (`✓ Completed`, `🛡️ Denied`), timestamp, task prompt, answer preview, and single-click full state restoration.
+    - Includes single-item deletion and one-click "Clear All History".
+  - **Dynamic Script Injection & Restricted URL Guidance (`App.tsx`)**:
+    - Automatically catches disconnected tabs upon extension reload, dynamically injects the updated content script via `chrome.scripting.executeScript`, and retries connection automatically.
+    - Provides explicit guidance when opened on internal browser pages (`chrome://...`).
+- **Unit Testing**: All **65/65 extension unit tests** and **9/9 backend pytest tests** pass 100% cleanly.
+- **Result**: Production bundle compiled in `dist/assets/content.ts-Dbpp9nrG.js` and `dist/assets/index.html-BDo6xQsQ.js`.
