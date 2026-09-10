@@ -4,13 +4,16 @@ import { PrivacyDecision } from '../../privacy/policyEngine';
 import { SanitizedContext } from '../../privacy/redactor';
 import { FirewallResult } from '../../agent/actionFirewall';
 import { ExecutionResult } from '../../content/actionExecutor';
+import { PrivacyDecisionList } from './PrivacyDecisionList';
+import { ChatMessage } from '../historyManager';
 
 interface LiveMissionControlProps {
-  task: string;
-  status: string;
-  isWorking: boolean;
-  summary: PageModelSummaryProps | null;
-  decisions: PrivacyDecision[];
+  messages?: ChatMessage[];
+  task?: string;
+  status?: string;
+  isWorking?: boolean;
+  summary?: PageModelSummaryProps | null;
+  decisions?: PrivacyDecision[];
   sanitizedContext?: SanitizedContext;
   sanitizedImages?: Record<string, any>;
   ocrResult?: any;
@@ -21,282 +24,351 @@ interface LiveMissionControlProps {
   finalAnswer?: string;
   steps?: any[];
   onTakeControl?: () => void;
-  onRetry?: () => void;
+  onRetry?: (prompt?: string) => void;
+}
+
+function getVisionImages(
+  sanitizedContext?: SanitizedContext,
+  sanitizedImages?: Record<string, any>
+): Array<{ id: string; dataUrl: string; redactedCount: number; description?: string }> {
+  const images: Array<{ id: string; dataUrl: string; redactedCount: number; description?: string }> = [];
+
+  if (sanitizedContext?.images && sanitizedContext.images.length > 0) {
+    sanitizedContext.images.forEach((imgItem: any) => {
+      if (imgItem.dataUrl) {
+        images.push({
+          id: imgItem.id || 'viewport_screenshot',
+          dataUrl: imgItem.dataUrl,
+          redactedCount: imgItem.redactedBoxesCount || 0,
+          description: imgItem.description,
+        });
+      }
+    });
+  } else if (sanitizedImages && Object.keys(sanitizedImages).length > 0) {
+    Object.entries(sanitizedImages).forEach(([id, data]: [string, any]) => {
+      if (data?.dataUrl || data?.redactedDataUrl) {
+        images.push({
+          id,
+          dataUrl: data.redactedDataUrl || data.dataUrl,
+          redactedCount: data.redactedBoxesCount || data.redactedRegionsCount || 0,
+          description: data.description,
+        });
+      }
+    });
+  }
+
+  return images;
 }
 
 export const LiveMissionControl: React.FC<LiveMissionControlProps> = ({
-  task,
-  status,
-  isWorking,
+  messages,
+  task = '',
+  status = 'Ready',
+  isWorking = false,
   summary,
-  decisions,
+  decisions = [],
   sanitizedContext,
   sanitizedImages,
+  ocrResult,
   firewallResult,
   executionResult,
   metrics,
   finalAnswer,
-  steps,
   onTakeControl,
   onRetry,
 }) => {
-  const [showPrivacyAudit, setShowPrivacyAudit] = useState(false);
+  const [expandedDetailsMap, setExpandedDetailsMap] = useState<Record<string, boolean>>({});
 
-  const isCompleted = !isWorking && (status.includes('Completed') || status.includes('Successfully') || !!finalAnswer);
-  const isError = !isWorking && (status.includes('Error') || status.includes('Failed') || firewallResult?.allowed === false);
-
-  // Compute live step progression
-  const getStepStatus = (index: number) => {
-    if (isCompleted) return 'completed';
-    if (!isWorking && isError) return index === 0 ? 'completed' : 'error';
-    if (!isWorking) return 'pending';
-
-    // During active work
-    if (index === 0) return 'completed'; // Understanding request
-    if (index === 1) return summary ? 'completed' : 'active'; // Observing webpage
-    if (index === 2) return sanitizedContext ? 'completed' : 'active'; // Finding target
-    if (index === 3) return executionResult ? 'completed' : 'active'; // Performing action
-    return 'pending'; // Verifying result
+  const toggleDetails = (id: string) => {
+    setExpandedDetailsMap((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const stepsList = [
-    { label: 'Understanding request', desc: 'Task intent analyzed' },
-    { label: 'Observing webpage', desc: summary ? `${summary.elementCount} elements mapped` : 'Inspecting DOM & Vision' },
-    { label: 'Finding target', desc: firewallResult?.action ? `Target ${firewallResult.action.element_id || 'mapped'}` : 'Analyzing candidates' },
-    { label: 'Performing action', desc: executionResult?.message || 'Executing safe action' },
-    { label: 'Verifying result', desc: finalAnswer ? 'Goal validated' : 'Evaluating outcome' },
-  ];
+  // If thread messages are provided, build active message list
+  const activeMessages: ChatMessage[] = messages && messages.length > 0
+    ? messages
+    : task
+    ? [
+        {
+          id: 'legacy_user',
+          role: 'user',
+          text: task,
+          timestamp: Date.now(),
+        },
+        {
+          id: 'legacy_assistant',
+          role: 'assistant',
+          text: finalAnswer || executionResult?.message || '',
+          status,
+          timestamp: Date.now(),
+          summary,
+          decisions,
+          sanitizedContext,
+          sanitizedImages,
+          ocrResult,
+          firewallResult,
+          executionResult,
+          metrics,
+        },
+      ]
+    : [];
 
-  // Dynamic progress calculation
-  const getProgressPercent = () => {
-    if (isCompleted) return 100;
-    if (isWorking) {
-      if (executionResult) return 85;
-      if (sanitizedContext) return 60;
-      if (summary) return 35;
-      return 15;
+  const handleOpenImageInNewTab = (dataUrl: string) => {
+    if (!dataUrl) return;
+    try {
+      const newWin = window.open();
+      if (newWin) {
+        newWin.document.title = 'WebPilot Vision Perception Image Payload';
+        newWin.document.body.style.margin = '0';
+        newWin.document.body.style.backgroundColor = '#090d16';
+        newWin.document.body.style.display = 'flex';
+        newWin.document.body.style.justifyContent = 'center';
+        newWin.document.body.style.alignItems = 'center';
+        newWin.document.body.style.minHeight = '100vh';
+        const img = newWin.document.createElement('img');
+        img.src = dataUrl;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100vh';
+        img.style.objectFit = 'contain';
+        img.style.boxShadow = '0 10px 40px rgba(0,0,0,0.8)';
+        newWin.document.body.appendChild(img);
+      } else if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+        chrome.tabs.create({ url: dataUrl });
+      }
+    } catch (err) {
+      console.warn('Failed to open image in new tab:', err);
     }
-    return 100;
   };
-
-  const currentActionText = isCompleted
-    ? 'Goal validated & verified'
-    : isWorking
-    ? executionResult
-      ? 'Verifying execution result'
-      : sanitizedContext
-      ? 'Finding target element'
-      : summary
-      ? 'Synthesizing multimodal page state'
-      : 'Observing webpage'
-    : status;
 
   return (
     <div className="mission-control-container">
-      {/* 1. User Prompt Glass Card */}
-      <div className="user-prompt-card">
-        <span className="user-icon">👤</span>
-        <div className="user-prompt-text">"{task}"</div>
-      </div>
-
-      {/* 2. Live Agent Working State / Mission Control */}
-      <div className={`mission-card ${isWorking ? 'card-working' : isCompleted ? 'card-completed' : 'card-error'}`}>
-        <div className="mission-card-header">
-          <div className="mission-header-left">
-            <span className="mission-sparkle">✦</span>
-            <span className="mission-header-title">
-              {isWorking ? 'WebPilot is working' : isCompleted ? 'Task Completed' : 'Mission Status'}
-            </span>
-          </div>
-          {isWorking && (
-            <button className="btn-take-control-mini" onClick={onTakeControl} title="Pause and take control">
-              ⏸ Take Control
-            </button>
-          )}
-        </div>
-
-        {/* Live Action Banner & Orbital Progress */}
-        <div className="live-action-hud">
-          <div className="hud-left">
-            <div className="hud-live-tag">
-              <span className="hud-pulsing-dot"></span>
-              <span>LIVE ACTION</span>
+      {activeMessages.map((msg, index) => {
+        if (msg.role === 'user') {
+          return (
+            <div key={msg.id || `user_${index}`} className="user-prompt-card">
+              <div className="prompt-header">
+                <span className="user-avatar">👤</span>
+                <span className="prompt-label">PROMPT</span>
+              </div>
+              <div className="user-prompt-text">"{msg.text}"</div>
             </div>
-            <div className="hud-action-text">{currentActionText}</div>
-          </div>
+          );
+        }
 
-          {/* Orbital Progress Circle */}
-          <div className="orbital-progress-container">
-            <svg className="orbital-svg" viewBox="0 0 44 44">
-              <circle className="orbital-bg" cx="22" cy="22" r="18" />
-              <circle
-                className="orbital-fill"
-                cx="22"
-                cy="22"
-                r="18"
-                strokeDasharray={113}
-                strokeDashoffset={113 - (113 * getProgressPercent()) / 100}
-              />
-            </svg>
-            <div className="orbital-center-text">
-              {isCompleted ? '✓' : `${getProgressPercent()}%`}
-            </div>
-          </div>
-        </div>
+        // Assistant Message turn
+        const isLatestAssistant = index === activeMessages.length - 1;
+        const showWorkingBanner = isWorking && isLatestAssistant && !msg.text;
 
-        {/* Step-by-Step Glowing Timeline */}
-        <div className="mission-timeline">
-          {stepsList.map((step, idx) => {
-            const stepStatus = getStepStatus(idx);
-            return (
-              <div key={idx} className={`timeline-item item-${stepStatus}`}>
-                <div className="timeline-marker">
-                  {stepStatus === 'completed' ? (
-                    <span className="marker-check">✓</span>
-                  ) : stepStatus === 'active' ? (
-                    <span className="marker-glow-dot"></span>
-                  ) : (
-                    <span className="marker-pending">○</span>
+        // Extract clean human-readable answer — prioritise agentPlanResponse fields,
+        // then msg.text, then fallback. Strip <think> blocks and raw JSON objects.
+        function extractCleanAnswer(msg: ChatMessage): string {
+          const candidates: (string | undefined | null)[] = [
+            // Best source: the model's answer field
+            msg.agentPlanResponse?.action?.answer,
+            // Second: the model's reasoning field
+            msg.agentPlanResponse?.action?.reasoning,
+            // Third: msg.text (set by agentLoop finalAnswer)
+            msg.text,
+            // Fourth: execution message
+            msg.executionResult?.message,
+          ];
+
+          for (const raw of candidates) {
+            if (!raw || typeof raw !== 'string') continue;
+            let cleaned = raw
+              .replace(/<think>[\s\S]*?<\/think>/gi, '') // strip think blocks
+              .trim();
+            // Skip if it looks like a raw JSON object (starts with { and has "action":)
+            if (cleaned.startsWith('{') && cleaned.includes('"action"')) continue;
+            if (cleaned.length > 0) return cleaned;
+          }
+
+          // Final fallback
+          return msg.status?.includes('Completed') || msg.status?.includes('Task')
+            ? 'Task completed successfully.'
+            : 'Task completed successfully.';
+        }
+
+        const responseText = extractCleanAnswer(msg);
+        const isErrorTurn = msg.status?.includes('Error') || msg.status?.includes('Failed') || msg.firewallResult?.allowed === false;
+        
+        const turnDecisions = msg.decisions || [];
+        const maskedCount = turnDecisions.filter((d) => d.decision === 'MASK').length;
+        const allowedCount = turnDecisions.filter((d) => d.decision === 'ALLOW').length;
+        const localCount = turnDecisions.filter((d) => d.decision === 'LOCAL_ONLY').length;
+        const tokenizeCount = turnDecisions.filter((d) => d.decision === 'TOKENIZE').length;
+        const visionImages = getVisionImages(msg.sanitizedContext, msg.sanitizedImages);
+        const isDetailsExpanded = !!expandedDetailsMap[msg.id];
+
+        const msgSourcesRun = msg.summary?.sourcesRun || (msg.sanitizedContext?.page ? ['dom'] : []);
+        const isDomUsed = true;
+        const isOcrUsed =
+          msgSourcesRun.includes('ocr') ||
+          (msg.ocrResult && msg.ocrResult.status !== 'skipped' && (msg.ocrResult.data?.length > 0 || msg.ocrResult.text)) ||
+          Boolean(msg.ocrResult?.text);
+        const isVisionUsed =
+          msgSourcesRun.includes('vision') ||
+          visionImages.length > 0 ||
+          Boolean(msg.sanitizedImages && Object.keys(msg.sanitizedImages).length > 0);
+
+        return (
+          <React.Fragment key={msg.id || `asst_${index}`}>
+            {/* 1. Working Banner */}
+            {showWorkingBanner && (
+              <div className="agent-working-card">
+                <div className="working-header">
+                  <div className="working-status">
+                    <span className="pulse-orb-indicator"></span>
+                    <span className="working-title">WebPilot AI is working...</span>
+                  </div>
+                  {onTakeControl && (
+                    <button className="btn-pause-agent" onClick={onTakeControl} title="Stop agent execution">
+                      ⏹ Stop
+                    </button>
                   )}
-                  {idx < stepsList.length - 1 && <div className="timeline-connector"></div>}
                 </div>
-                <div className="timeline-info">
-                  <div className="timeline-label">{step.label}</div>
-                  <div className="timeline-desc">{step.desc}</div>
+                <p className="working-subtext">{msg.status || status || 'Analyzing webpage context and generating plan...'}</p>
+              </div>
+            )}
+
+            {/* 2. Assistant Response Card */}
+            {!showWorkingBanner && responseText && !isErrorTurn && (
+              <div className="agent-response-card">
+                <div className="response-header">
+                  <span className="agent-sparkle">✦</span>
+                  <span className="response-title">RESPONSE & ACTION OUTCOME</span>
+                </div>
+                <div className="response-body">{responseText}</div>
+
+                <div className="response-footer">
+                  <div className="response-footer-metrics">
+                    {msg.metrics?.totalLatencyMs && (
+                      <span className="latency-tag">⚡ {(msg.metrics.totalLatencyMs / 1000).toFixed(2)}s</span>
+                    )}
+                    {msg.summary && <span className="element-tag">📄 {msg.summary.elementCount} elements</span>}
+                  </div>
+
+                  <button
+                    className="btn-view-details"
+                    onClick={() => toggleDetails(msg.id)}
+                    title="Click to view full multimodal vision, OCR & privacy details"
+                  >
+                    🔍 {isDetailsExpanded ? 'Hide details ▲' : 'Click to view more details ▼'}
+                  </button>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            )}
 
-        {/* Agent Activity Futuristic HUD Grid */}
-        <div className="agent-activity-grid">
-          <div className="activity-hud-item">
-            <span className="hud-key">VISION</span>
-            <span className="hud-val val-active">ACTIVE</span>
-          </div>
-          <div className="activity-hud-item">
-            <span className="hud-key">PAGE</span>
-            <span className="hud-val val-ok">ANALYZED</span>
-          </div>
-          <div className="activity-hud-item">
-            <span className="hud-key">TARGET</span>
-            <span className="hud-val val-ok">{firewallResult ? 'FOUND' : 'SCANNING'}</span>
-          </div>
-          <div className="activity-hud-item">
-            <span className="hud-key">ACTION</span>
-            <span className={`hud-val ${isCompleted ? 'val-ok' : 'val-active'}`}>
-              {isCompleted ? 'COMPLETE' : 'IN PROGRESS'}
-            </span>
-          </div>
-        </div>
-
-        {/* Live Transmitted Viewport Screenshot Hologram Preview */}
-        {sanitizedImages?.viewport_screenshot?.dataUrl && (
-          <div className="holographic-preview-card">
-            <div className="hologram-header">
-              <span className="hologram-scan-icon">◌</span>
-              <span>LIVE TRANSMITTED VIEWPORT PERCEPTION</span>
-              <span className="hologram-badge">
-                {sanitizedImages.viewport_screenshot.redactedRegionsCount > 0
-                  ? `🔒 ${sanitizedImages.viewport_screenshot.redactedRegionsCount} Blurred`
-                  : '🟢 100% Intact'}
-              </span>
-            </div>
-            <div className="hologram-img-wrapper">
-              <img
-                src={sanitizedImages.viewport_screenshot.dataUrl}
-                alt="Transmitted Viewport"
-                className="hologram-img"
-              />
-              <div className="hologram-scanline"></div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. Final Answer Success Display */}
-        {finalAnswer && (
-          <div className="final-answer-card">
-            <div className="answer-header">
-              <span className="answer-icon">🎯</span>
-              <strong>TASK RESULT & INSIGHT</strong>
-            </div>
-            <div className="answer-body">{finalAnswer}</div>
-          </div>
-        )}
-
-        {/* 4. Completion Summary Pills */}
-        {isCompleted && (
-          <div className="completion-summary-bar">
-            <div className="summary-left">
-              <span className="check-success">✓</span>
-              <span>Action completed successfully</span>
-            </div>
-            <div className="summary-pills">
-              <span className="pill-metric">{steps?.length || 1} action{steps?.length === 1 ? '' : 's'}</span>
-              <span className="pill-metric">
-                {metrics?.totalLatencyMs ? `${(metrics.totalLatencyMs / 1000).toFixed(1)}s` : '1.2s'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* 5. Warning / Error Card */}
-        {isError && (
-          <div className="error-alert-card">
-            <div className="error-header">
-              <span>⚠️ Something needs your attention</span>
-            </div>
-            <p className="error-desc">{status}</p>
-            <div className="error-actions">
-              {onRetry && (
-                <button className="btn-retry-action" onClick={onRetry}>
-                  🔄 Try Again
-                </button>
-              )}
-              {onTakeControl && (
-                <button className="btn-take-control-action" onClick={onTakeControl}>
-                  ⏸ Take Control
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 6. Expandable Privacy Guard Details */}
-      <div className="privacy-guard-accordion">
-        <button
-          className="privacy-guard-toggle"
-          onClick={() => setShowPrivacyAudit(!showPrivacyAudit)}
-        >
-          <div className="toggle-left">
-            <span>🛡️ Context-Aware Privacy Engine</span>
-            <span className="privacy-pill">0 Raw PII Leaks</span>
-          </div>
-          <span className="toggle-arrow">{showPrivacyAudit ? '▲' : '▼'}</span>
-        </button>
-
-        {showPrivacyAudit && (
-          <div className="privacy-audit-content">
-            <div className="privacy-counters-row">
-              <span className="p-badge p-allow">🟢 {decisions.filter(d => d.decision === 'ALLOW').length} ALLOW</span>
-              <span className="p-badge p-mask">🔴 {decisions.filter(d => d.decision === 'MASK').length} MASK</span>
-              <span className="p-badge p-local">🟡 {decisions.filter(d => d.decision === 'LOCAL_ONLY').length} LOCAL</span>
-              <span className="p-badge p-tokenize">🟣 {decisions.filter(d => d.decision === 'TOKENIZE').length} TOKENIZE</span>
-            </div>
-            <div className="privacy-audit-list">
-              {decisions.slice(0, 4).map((d, i) => (
-                <div key={i} className="audit-item">
-                  <span className="audit-type">{(d.entityType || 'PII').toUpperCase()}</span>
-                  <span className="audit-dec">{d.decision}</span>
-                  <span className="audit-reason">{d.reason}</span>
+            {/* 3. Comprehensive Details Breakdown Audit Panel */}
+            {!showWorkingBanner && isDetailsExpanded && (
+              <div className="details-breakdown-card">
+                <div className="details-header">
+                  <span className="details-title">🛡️ Multimodal & Privacy Inspection Audit</span>
+                  <span className="privacy-pill">0 PII Leaked</span>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+
+                {/* 3 Perception Pipeline Steps Status */}
+                <div className="details-section-title">🔍 PERCEPTION PIPELINE STEPS STATUS:</div>
+                <div className="privacy-counters-row" style={{ marginBottom: '10px' }}>
+                  <span className={`p-badge ${isDomUsed ? 'p-allow' : 'p-mask'}`}>
+                    {isDomUsed ? '🟢 DOM & ARIA: Used' : '⚪ DOM & ARIA: Skipped'}
+                  </span>
+                  <span className={`p-badge ${isOcrUsed ? 'p-allow' : 'p-mask'}`}>
+                    {isOcrUsed ? '🟢 OCR: Used' : '⚪ OCR: Skipped'}
+                  </span>
+                  <span className={`p-badge ${isVisionUsed ? 'p-allow' : 'p-mask'}`}>
+                    {isVisionUsed ? '🟢 Local vision: Used' : '⚪ Local vision: Skipped'}
+                  </span>
+                </div>
+
+                {/* Vision Payload Display */}
+                {visionImages.length > 0 ? (
+                  <div className="details-vision-section">
+                    <div className="details-section-title">📷 TRANSMITTED MULTIMODAL VISION PAYLOAD:</div>
+                    {visionImages.map((imgItem, vIdx) => (
+                      <div key={vIdx} className="details-vision-card">
+                        <div className="vision-card-header">
+                          <span className="vision-id">Target: <strong>{imgItem.id}</strong></span>
+                          {imgItem.redactedCount > 0 ? (
+                            <span className="p-badge p-mask">🔒 {imgItem.redactedCount} Region{imgItem.redactedCount !== 1 ? 's' : ''} Redacted</span>
+                          ) : (
+                            <span className="p-badge p-allow">🟢 100% Intact Visual Context</span>
+                          )}
+                        </div>
+                        <div
+                          className="vision-img-frame"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleOpenImageInNewTab(imgItem.dataUrl)}
+                          title="Click image to open full resolution payload in a new tab"
+                        >
+                          <img src={imgItem.dataUrl} alt={`Vision payload ${imgItem.id}`} className="details-vision-img" />
+                        </div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--accent-indigo)', textAlign: 'center', marginTop: '2px', cursor: 'pointer' }} onClick={() => handleOpenImageInNewTab(imgItem.dataUrl)}>
+                          🔗 Click image to view in new tab ↗
+                        </div>
+                        {imgItem.description && (
+                          <div className="vision-desc">{imgItem.description}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="details-vision-notice">
+                    <span>ℹ️ Text & DOM Context Mode (No visual screenshot attached to API call).</span>
+                  </div>
+                )}
+
+                {/* OCR Visual Readings Display */}
+                {msg.ocrResult && msg.ocrResult.text && (
+                  <div className="details-ocr-section">
+                    <div className="details-section-title">🔤 EXTRACTED OCR VISUAL READINGS:</div>
+                    <div className="ocr-text-box">{msg.ocrResult.text}</div>
+                  </div>
+                )}
+
+                {/* Privacy Policy Counters */}
+                <div className="details-section-title">CONTEXT-AWARE PRIVACY POLICY ENGINE:</div>
+                <div className="privacy-counters-row">
+                  <span className="p-badge p-allow">🟢 {allowedCount} ALLOWED</span>
+                  <span className="p-badge p-mask">🔴 {maskedCount} MASKED</span>
+                  <span className="p-badge p-local">🟡 {localCount} LOCAL ONLY</span>
+                  <span className="p-badge p-tokenize">🟣 {tokenizeCount} TOKENIZED</span>
+                </div>
+
+                {/* Decision List */}
+                {turnDecisions.length > 0 && (
+                  <>
+                    <div className="details-section-title">ELEMENT & ENTITY DECISIONS AUDIT:</div>
+                    <PrivacyDecisionList decisions={turnDecisions} />
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 5. Error Alert Card */}
+            {!showWorkingBanner && isErrorTurn && (
+              <div className="agent-error-card">
+                <div className="error-header">
+                  <span>⚠️ Service Notice</span>
+                </div>
+                <p className="error-desc">{msg.status || 'Action execution encountered an error.'}</p>
+                <div className="error-actions">
+                  {onRetry && (
+                    <button className="btn-retry-action" onClick={() => onRetry(activeMessages[index - 1]?.text)}>
+                      🔄 Try Again
+                    </button>
+                  )}
+                  {onTakeControl && (
+                    <button className="btn-take-control-action" onClick={onTakeControl}>
+                      ⏸ Take Control
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 };
+

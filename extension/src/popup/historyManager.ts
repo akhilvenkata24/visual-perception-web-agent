@@ -4,11 +4,31 @@ import { SanitizedContext } from '../privacy/redactor';
 import { FirewallResult } from '../agent/actionFirewall';
 import { ExecutionResult } from '../content/actionExecutor';
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  status?: string;
+  timestamp: number;
+  summary?: PageModelSummaryProps | null;
+  decisions?: PrivacyDecision[];
+  sanitizedContext?: SanitizedContext;
+  sanitizedImages?: Record<string, any>;
+  ocrResult?: any;
+  agentPlanResponse?: any;
+  firewallResult?: FirewallResult;
+  executionResult?: ExecutionResult | null;
+  metrics?: PipelineMetrics;
+  steps?: any[];
+}
+
 export interface ActivePopupState {
   task: string;
   status: string;
-  summary: PageModelSummaryProps | null;
-  decisions: PrivacyDecision[];
+  isWorking?: boolean;
+  messages?: ChatMessage[];
+  summary?: PageModelSummaryProps | null;
+  decisions?: PrivacyDecision[];
   sanitizedContext?: SanitizedContext;
   sanitizedImages?: Record<string, any>;
   ocrResult?: any;
@@ -44,6 +64,12 @@ const STORAGE_KEY_HISTORY = 'privacy_agent_task_history';
 const MAX_HISTORY_ITEMS = 30;
 
 const memoryFallback = new Map<string, string>();
+
+function getDomainStorageKey(domainKey?: string): string {
+  if (!domainKey) return STORAGE_KEY_ACTIVE;
+  const safeDomain = domainKey.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${STORAGE_KEY_ACTIVE}_${safeDomain}`;
+}
 
 /**
  * Storage adapter supporting chrome.storage.local with localStorage and memory fallback
@@ -88,17 +114,27 @@ async function storageSet<T>(key: string, value: T): Promise<void> {
 }
 
 /**
- * Saves the current active task and debug panel state
+ * Saves the active task, messages thread, and debug panel state for a specific domain
  */
-export async function saveActiveState(state: ActivePopupState): Promise<void> {
-  await storageSet(STORAGE_KEY_ACTIVE, state);
+export async function saveActiveState(state: ActivePopupState | null, domainKey?: string): Promise<void> {
+  const key = getDomainStorageKey(domainKey);
+  await storageSet(key, state);
 }
 
 /**
- * Loads the last active task and debug panel state
+ * Loads the active task and messages thread for a specific domain
  */
-export async function loadActiveState(): Promise<ActivePopupState | null> {
-  return await storageGet<ActivePopupState>(STORAGE_KEY_ACTIVE);
+export async function loadActiveState(domainKey?: string): Promise<ActivePopupState | null> {
+  const key = getDomainStorageKey(domainKey);
+  return await storageGet<ActivePopupState>(key);
+}
+
+/**
+ * Clears the active state session for a specific domain
+ */
+export async function clearActiveState(domainKey?: string): Promise<void> {
+  const key = getDomainStorageKey(domainKey);
+  await storageSet(key, null);
 }
 
 /**

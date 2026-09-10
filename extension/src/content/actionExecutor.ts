@@ -185,7 +185,13 @@ export function executeAction(
   if (rawActionStr === 'type') {
     const textToType = actionObj.value || '';
     try {
-      if ('value' in domElement) {
+      if (typeof (domElement as any).focus === 'function') {
+        try {
+          (domElement as any).focus();
+        } catch {}
+      }
+
+      if ('value' in domElement && (domElement as any).value !== undefined) {
         (domElement as any).value = textToType;
         domElement.dispatchEvent(new Event('input', { bubbles: true }));
         domElement.dispatchEvent(new Event('change', { bubbles: true }));
@@ -194,6 +200,26 @@ export function executeAction(
           action: 'type',
           elementId: targetId,
           message: `Entered text into input '${targetId}'.`,
+          timestamp,
+        };
+      } else if (
+        (domElement instanceof HTMLElement && domElement.isContentEditable) ||
+        domElement.hasAttribute('contenteditable') ||
+        domElement.getAttribute('contenteditable') === 'true' ||
+        domElement.getAttribute('role') === 'textbox'
+      ) {
+        if (domElement instanceof HTMLElement) {
+          domElement.innerText = textToType;
+        } else {
+          domElement.textContent = textToType;
+        }
+        domElement.dispatchEvent(new Event('input', { bubbles: true }));
+        domElement.dispatchEvent(new Event('change', { bubbles: true }));
+        return {
+          success: true,
+          action: 'type',
+          elementId: targetId,
+          message: `Entered text into editable element '${targetId}'.`,
           timestamp,
         };
       } else {

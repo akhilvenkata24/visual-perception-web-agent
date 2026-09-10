@@ -188,6 +188,82 @@ export function shouldRunVision(task: string, pageModel: PageModel): boolean {
 }
 
 /**
+ * Dynamically detects human face bounding boxes anywhere within an image or canvas element
+ * using YCbCr skin-tone color space feature clustering.
+ * Locates the actual face position regardless of where it appears in the frame (center, bottom, top, left, right).
+ */
+export function detectDynamicFaceRegion(
+  el: HTMLElement,
+  pos: { x: number; y: number; width: number; height: number }
+): { x: number; y: number; width: number; height: number } | null {
+  if (typeof document === 'undefined' || !(el instanceof HTMLImageElement || el instanceof HTMLCanvasElement)) {
+    return null;
+  }
+
+  try {
+    const sampleCanvas = document.createElement('canvas');
+    const sampleW = 100;
+    const sampleH = 100;
+    sampleCanvas.width = sampleW;
+    sampleCanvas.height = sampleH;
+    const ctx = sampleCanvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.drawImage(el, 0, 0, sampleW, sampleH);
+    const imgData = ctx.getImageData(0, 0, sampleW, sampleH);
+    const data = imgData.data;
+
+    let minX = sampleW;
+    let minY = sampleH;
+    let maxX = 0;
+    let maxY = 0;
+    let skinPixelCount = 0;
+
+    for (let py = 0; py < sampleH; py++) {
+      for (let px = 0; px < sampleW; px++) {
+        const idx = (py * sampleW + px) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+
+        // Normalized YCbCr skin tone detection formula
+        const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+        const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+
+        const isSkin = r > 45 && g > 30 && b > 20 && r > g && r > b && Math.abs(r - g) > 15 && cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
+
+        if (isSkin) {
+          skinPixelCount++;
+          if (px < minX) minX = px;
+          if (px > maxX) maxX = px;
+          if (py < minY) minY = py;
+          if (py > maxY) maxY = py;
+        }
+      }
+    }
+
+    // If skin cluster exists and represents at least 2% of sample pixels
+    if (skinPixelCount >= 200 && maxX > minX && maxY > minY) {
+      const normX = minX / sampleW;
+      const normY = minY / sampleH;
+      const normW = (maxX - minX) / sampleW;
+      const normH = Math.min((maxY - minY) / sampleH, 0.45); // Clamp face height to head region
+
+      return {
+        x: Math.round(pos.x + pos.width * normX),
+        y: Math.round(pos.y + pos.height * normY),
+        width: Math.round(pos.width * normW),
+        height: Math.round(pos.height * normH),
+      };
+    }
+  } catch (_err) {
+    // Cross-origin image canvas security restriction fallback
+  }
+
+  return null;
+}
+
+/**
  * Main local visual inference function.
  * Detects visual sensitive features: Faces in profile photos and visual regions in document images.
  */
@@ -423,7 +499,7 @@ export async function extractVisualRegionsDetailed(pageModel: PageModel): Promis
         continue;
       }
 
-      // 5. Standard Profile Avatars
+      // 5. Standard Profile Avatars & General Person Photos
       if (imgEl.id.includes('photo') || imgEl.id.startsWith('photo_') || (imgEl.label && imgEl.label.toLowerCase().includes('photo'))) {
         const naturalW = 128;
         const naturalH = 128;
@@ -432,16 +508,16 @@ export async function extractVisualRegionsDetailed(pageModel: PageModel): Promis
           id: `face_${++regionCounter}`,
           type: 'face',
           bbox: {
-            x: pos.x,
-            y: pos.y,
-            width,
-            height,
+            x: Math.round(pos.x + width * 0.15),
+            y: Math.round(pos.y + height * 0.05),
+            width: Math.round(width * 0.70),
+            height: Math.round(height * 0.35),
           },
           imageBbox: {
             x: Math.round(naturalW * 0.15),
-            y: Math.round(naturalH * 0.1),
-            width: Math.round(naturalW * 0.7),
-            height: Math.round(naturalH * 0.8),
+            y: Math.round(naturalH * 0.05),
+            width: Math.round(naturalW * 0.70),
+            height: Math.round(naturalH * 0.35),
           },
           confidence: 0.94,
           source: 'vision',
@@ -460,15 +536,45 @@ export async function extractVisualRegionsDetailed(pageModel: PageModel): Promis
             x: Math.round(pos.x + width * 0.05),
             y: Math.round(pos.y + height * 0.15),
             width: Math.round(width * 0.35),
-            height: Math.round(height * 0.7),
+            height: Math.round(height * 0.40),
           },
           imageBbox: {
             x: 20,
             y: 40,
             width: 140,
-            height: 180,
+            height: 100,
           },
           confidence: 0.91,
+          source: 'vision',
+          elementId: imgEl.id,
+          executionProvider: activeExecutionProvider,
+        });
+        continue;
+      }
+
+      // 7. General photo / image elements on dynamic web pages (e.g. Google Images, Pinterest, web pages)
+      if (imgEl.type === 'image' || imgEl.tagName === 'img' || imgEl.tagName === 'canvas') {
+        const domElement = typeof document !== 'undefined' ? (document.getElementById(imgEl.id) || document.querySelector(`[data-perception-id="${imgEl.id}"]`)) : null;
+        const dynamicFace = domElement ? detectDynamicFaceRegion(domElement as HTMLElement, pos) : null;
+
+        const faceBbox = dynamicFace || {
+          x: Math.round(pos.x + width * 0.15),
+          y: Math.round(pos.y + height * 0.05),
+          width: Math.round(width * 0.70),
+          height: Math.round(height * 0.35),
+        };
+
+        regions.push({
+          id: `face_${++regionCounter}`,
+          type: 'face',
+          bbox: faceBbox,
+          imageBbox: {
+            x: Math.round(faceBbox.x - pos.x),
+            y: Math.round(faceBbox.y - pos.y),
+            width: faceBbox.width,
+            height: faceBbox.height,
+          },
+          confidence: 0.94,
           source: 'vision',
           elementId: imgEl.id,
           executionProvider: activeExecutionProvider,

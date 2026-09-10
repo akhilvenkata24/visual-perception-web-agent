@@ -59,7 +59,7 @@ export async function redactImageRegions(
   options: ImageRedactionOptions = {}
 ): Promise<ImageRedactionResult> {
   const mode = options.mode || 'blur';
-  const blurRadius = options.blurRadius ?? 10;
+  const blurRadius = options.blurRadius ?? 18;
   const padding = options.padding ?? 4;
   const fillColor = options.fillColor || '#1e293b';
 
@@ -208,8 +208,11 @@ export async function redactImageRegions(
 }
 
 /**
- * Applies selective blur by extracting the subregion, drawing blurred onto offscreen canvas,
- * and pasting back onto the main canvas.
+ * Applies top-notch selective blur by combining:
+ * 1. Pixelation Downsampling (destroys raw high-frequency text/biometrics)
+ * 2. Multi-pass Heavy Gaussian Blur (smooths pixel blocks into a soft frosted gradient)
+ * 3. Premium Frosted Privacy Shading Veil (high-density opacity protection)
+ * 4. Sleek Privacy Lock Badge ("🔒 PRIVACY BLURRED")
  */
 function applySelectiveBlur(
   ctx: CanvasRenderingContext2D,
@@ -220,37 +223,65 @@ function applySelectiveBlur(
   height: number,
   blurRadius: number
 ): void {
+  // 1. Primary offscreen blur canvas
   const blurCanvas = document.createElement('canvas');
   blurCanvas.width = width;
   blurCanvas.height = height;
   const blurCtx = blurCanvas.getContext('2d');
   if (!blurCtx) return;
 
-  // Set CSS filter blur
-  blurCtx.filter = `blur(${blurRadius}px)`;
-  // Draw subregion with slight margin to prevent border bleed
-  blurCtx.drawImage(
-    source,
-    x,
-    y,
-    width,
-    height,
-    0,
-    0,
-    width,
-    height
-  );
+  // 2. Layer 1: Pixelation Downsampling (Destroys fine edge features and text strokes)
+  const pixelBlockSize = Math.max(6, Math.min(20, Math.round(Math.min(width, height) / 5)));
+  const scaledW = Math.max(1, Math.floor(width / pixelBlockSize));
+  const scaledH = Math.max(1, Math.floor(height / pixelBlockSize));
 
-  // Clip and draw back to main context
+  const miniCanvas = document.createElement('canvas');
+  miniCanvas.width = scaledW;
+  miniCanvas.height = scaledH;
+  const miniCtx = miniCanvas.getContext('2d');
+
+  if (miniCtx) {
+    miniCtx.imageSmoothingEnabled = false;
+    miniCtx.drawImage(source, x, y, width, height, 0, 0, scaledW, scaledH);
+    blurCtx.imageSmoothingEnabled = true;
+    blurCtx.drawImage(miniCanvas, 0, 0, scaledW, scaledH, 0, 0, width, height);
+  } else {
+    blurCtx.drawImage(source, x, y, width, height, 0, 0, width, height);
+  }
+
+  // 3. Layer 2: Multi-pass Heavy Gaussian Blur (Smooths block artifacts into a soft gradient)
+  const effectiveBlur = Math.max(18, Math.min(42, Math.round(Math.max(blurRadius || 22, height * 0.4))));
+  blurCtx.filter = `blur(${effectiveBlur}px)`;
+  blurCtx.drawImage(blurCanvas, 0, 0, width, height);
+  blurCtx.filter = `blur(${Math.round(effectiveBlur * 0.5)}px)`;
+  blurCtx.drawImage(blurCanvas, 0, 0, width, height);
+
+  // 4. Clip and composite back onto target context
   ctx.save();
   ctx.beginPath();
   ctx.rect(x, y, width, height);
   ctx.clip();
   ctx.drawImage(blurCanvas, x, y);
-  
-  // Also draw a semi-transparent subtle privacy veil over blurred text for readability safety
-  ctx.fillStyle = 'rgba(241, 245, 249, 0.45)';
+
+  // 5. Layer 3: Premium Frosted Privacy Shading Veil
+  ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
   ctx.fillRect(x, y, width, height);
+
+  // 6. Layer 4: Modern Minimalist Privacy Lock Badge
+  if (typeof ctx.strokeRect === 'function') {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+    ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+  }
+
+  if (width >= 60 && height >= 20) {
+    ctx.fillStyle = 'rgba(51, 65, 85, 0.85)';
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔒 PRIVACY BLURRED', x + width / 2, y + height / 2);
+  }
+
   ctx.restore();
 }
 
@@ -294,13 +325,41 @@ function applyPixelation(
 /**
  * Selectively redacts / blurs sensitive regions directly on a full-page / viewport screenshot.
  * Applies Gaussian blur or redaction at exact viewport bounding coordinates, preserving all surrounding content.
+ * Automatically scales bounding boxes to physical canvas resolution (Device Pixel Ratio / Retina scaling).
  */
 export async function redactViewportScreenshot(
   screenshotDataUrl: string,
   viewportBoxes: BoundingBox[],
   options: ImageRedactionOptions = {}
 ): Promise<ImageRedactionResult> {
-  const result = await redactImageRegions(screenshotDataUrl, viewportBoxes, options);
+  let scaledBoxes = viewportBoxes;
+
+  if (typeof window !== 'undefined' && screenshotDataUrl && viewportBoxes && viewportBoxes.length > 0) {
+    try {
+      const img = await loadImageFromString(screenshotDataUrl);
+      const canvasW = img.naturalWidth || img.width;
+      const canvasH = img.naturalHeight || img.height;
+
+      const viewportW = window.innerWidth || canvasW;
+      const viewportH = window.innerHeight || canvasH;
+
+      const scaleX = canvasW / viewportW;
+      const scaleY = canvasH / viewportH;
+
+      if (Math.abs(scaleX - 1.0) > 0.02 || Math.abs(scaleY - 1.0) > 0.02) {
+        scaledBoxes = viewportBoxes.map((b) => ({
+          x: Math.round(b.x * scaleX),
+          y: Math.round(b.y * scaleY),
+          width: Math.round(b.width * scaleX),
+          height: Math.round(b.height * scaleY),
+        }));
+      }
+    } catch (e) {
+      console.warn('Viewport screenshot scale calculation warning:', e);
+    }
+  }
+
+  const result = await redactImageRegions(screenshotDataUrl, scaledBoxes, options);
   return {
     ...result,
     elementId: 'viewport_screenshot',

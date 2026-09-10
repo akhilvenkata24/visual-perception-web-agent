@@ -75,7 +75,7 @@ def test_plan_endpoint_valid_payload():
     if data["action"]["action"] == "click":
         assert data["action"]["element_id"] in ["btn_profile_rahul", "name_rahul"]
     assert "metadata" in data
-    assert data["metadata"]["provider"] in ["StubAIProvider", "GroqAIProvider", "GeminiAIProvider"]
+    assert data["metadata"]["provider"] in ["StubAIProvider", "GroqAIProvider", "GeminiAIProvider", "FallbackAIProvider"]
 
 
 def test_plan_endpoint_invalid_payload():

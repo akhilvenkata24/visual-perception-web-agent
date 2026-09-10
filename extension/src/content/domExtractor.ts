@@ -280,8 +280,13 @@ function determineElementType(el: HTMLElement): ElementType {
   if (role === 'textbox' || role === 'searchbox') return 'input';
   if (role === 'combobox' || role === 'listbox') return 'select';
 
+  // Editable content containers (e.g. Gmail / Slack / Rich Editors)
+  if (el.hasAttribute('contenteditable') || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+    return 'input';
+  }
+
   // Interactive controls with click handlers or keyboard focusable
-  if (el.hasAttribute('onclick') || el.getAttribute('tabindex') === '0' || el.hasAttribute('contenteditable') || tag === 'SUMMARY') {
+  if (el.hasAttribute('onclick') || el.getAttribute('tabindex') === '0' || tag === 'SUMMARY') {
     return 'button';
   }
 

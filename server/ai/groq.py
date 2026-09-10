@@ -20,45 +20,65 @@ logger = logging.getLogger("server.ai.groq")
 
 # Models for text-only tasks
 GROQ_TEXT_MODELS = [
-    "groq/compound-mini",
-    "groq/compound",
-    "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
 ]
 
 # Models for multimodal vision tasks (image reasoning)
 GROQ_VISION_MODELS = [
-    "qwen/qwen3.6-27b",
-    "qwen/qwen3.8-27b",
+    "llama-3.2-11b-vision-preview",
+    "llama-3.2-90b-vision-preview",
+    "llama-3.3-70b-versatile",
 ]
 
-GROQ_SYSTEM_INSTRUCTION = """You are an autonomous browser agent. Your job is to achieve the user's goal by deciding the next browser action or providing the final answer.
+GROQ_SYSTEM_INSTRUCTION = """You are an autonomous browser AI agent. Your job is to analyze webpage content, visual image inputs, and OCR text to directly answer the user's task or perform browser actions.
 
-DECISION PROTOCOL (EXECUTE IN ORDER):
-1. MULTI-STEP / HIDDEN INFORMATION TASKS:
-   - If the task asks for information that is currently hidden (e.g. bios, details, expanded sections) or asks to open/view profiles (e.g. "Open Rahul's profile and Priya's profile and give me what's in their bios"):
-     * Check if there are buttons like "View Profile", "Open", "Show Details", "Read More" for any of the requested people/items whose information is NOT yet visible in the page elements.
-     * If such a button exists, you MUST click it! Select that button's exact element_id.
-     * Do NOT output "none" or say "the bio is not present" if you haven't clicked the profile button yet. Clicks are how you reveal hidden bios!
-     * Output: {"action": "click", "element_id": "<button_id>", "reasoning": "Clicking View Profile for <Person> to reveal their bio."}
+CRITICAL INSTRUCTION FOR QUESTION, CHAT & IDENTIFICATION TASKS:
+- If the user's prompt is a question, greeting, general chat ("hi", "hello"), or identification request (e.g. "who is this person", "what is this", "identify the person", "summarize the page", "who is wearing..."):
+  1. Inspect the sanitized page elements, heading text, OCR readings, and attached visual images.
+  2. ALWAYS output action "none".
+  3. Provide a clear, detailed, and direct answer in BOTH the "answer" and "reasoning" fields!
 
-2. COMPLETION / INFORMATION EXTRACTION / VISUAL IDENTIFICATION:
-   - If ALL requested information for the task is already visible on the current page (or was revealed after opening profiles or provided in the visual images):
-     * If images are attached, inspect the image visually to answer the user's question (e.g. identify the person, describe visual features, read text).
-     * Output action "none" with the comprehensive answer.
-     * Output: {"action": "none", "answer": "<Comprehensive direct answer containing the extracted information>", "reasoning": "<Summary of findings>"}
+CRITICAL INSTRUCTION FOR EMAIL COMPOSITION & FORM FILLING TASKS:
+- When requested to send an email or fill out a multi-field form:
+  1. Target the Recipient / To field: type ONLY the target recipient email address (e.g. "neerushbuchi07@gmail.com").
+  2. Target the Subject field: type an appropriate subject line (e.g. "Good Morning"). DO NOT type the email address into the subject field!
+  3. Target the Body / Message field: type the actual message content (e.g. "Good morning! Hope you have a great day."). DO NOT type the email address into the body field!
+  4. Target the Send button: click Send once recipient, subject, and body fields have been populated.
 
-RULES:
-1. ONLY select target element IDs from the supplied page elements list.
-2. Never invent element IDs.
-3. Output valid JSON matching this schema:
+REQUIRED JSON OUTPUT FORMAT:
 {
   "action": "click" | "type" | "scroll" | "navigate" | "select" | "none",
   "element_id": string | null,
   "value": string | null,
-  "reasoning": string,
-  "answer": string | null
+  "reasoning": "Detailed explanation and answer",
+  "answer": "Detailed direct answer to the user's question"
 }
 """
+
+
+def _clean_text_value(val: Optional[str]) -> Optional[str]:
+    """Cleans text fields by stripping <think> tags and un-nesting stringified JSON objects."""
+    if not val or not isinstance(val, str):
+        return None
+    s = val.strip()
+    s = re.sub(r'<think>.*?</think>', '', s, flags=re.DOTALL).strip()
+    if not s:
+        return None
+    if s.startswith('{') and ('"action"' in s or '"reasoning"' in s or '"answer"' in s):
+        try:
+            d = json.loads(s)
+            if isinstance(d, dict):
+                inner = d.get("answer") or d.get("reasoning") or d.get("value")
+                if inner and isinstance(inner, str):
+                    return _clean_text_value(inner)
+        except Exception:
+            match = re.search(r'"(?:reasoning|answer)"\s*:\s*"([^"]+)"', s)
+            if match:
+                return match.group(1)
+            return None
+    return s
 
 
 class GroqAIProvider(BaseAIProvider):
@@ -252,16 +272,15 @@ class GroqAIProvider(BaseAIProvider):
                                 action_enum = at
                                 break
 
-                        answer_text = parsed.get("answer")
-                        if answer_text:
-                            answer_text = re.sub(r"<think>.*?</think>", "", str(answer_text), flags=re.DOTALL).strip()
+                        answer_text = _clean_text_value(parsed.get("answer"))
+                        reasoning_text = _clean_text_value(parsed.get("reasoning"))
 
-                        reasoning_text = parsed.get("reasoning", f"Groq AI plan via '{model_name}'.")
-                        if reasoning_text:
-                            reasoning_text = re.sub(r"<think>.*?</think>", "", str(reasoning_text), flags=re.DOTALL).strip()
-
-                        if answer_text and not reasoning_text:
+                        if not answer_text and reasoning_text:
+                            answer_text = reasoning_text
+                        if not reasoning_text and answer_text:
                             reasoning_text = answer_text
+                        if not reasoning_text:
+                            reasoning_text = f"Groq AI plan via '{model_name}'."
 
                         action = AgentAction(
                             action=action_enum,

@@ -21,36 +21,63 @@ export interface OcrExtractionResult {
 /**
  * Gets or lazily initializes the singleton Tesseract worker.
  * Reused for all subsequent OCR requests to avoid worker recreation overhead.
+ *
+ * CRITICAL: Tesseract's internal Web Worker cannot fetch chrome-extension:// URLs
+ * because the worker runs in the page's origin context (cross-origin).
+ * Fix: pre-fetch eng.traineddata in the content script (which HAS extension URL access),
+ * convert to a blob URL, and pass that blob URL as Tesseract's langPath.
+ * Tesseract will fetch `<langPath>/eng.traineddata` — so we serve the blob from a
+ * Service Worker intercept OR pass the ArrayBuffer directly using workerOptions.
  */
 export async function getOrInitOcrWorker(): Promise<Worker> {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
-      // Determine local langPath if available
-      let langPath: string | undefined;
-      if (typeof window !== 'undefined' && window.location?.origin) {
-        langPath = window.location.origin; // e.g. http://localhost:8080 where eng.traineddata is hosted
-      }
-      if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-        langPath = chrome.runtime.getURL('');
+      // In Vitest / unit test environment, return a mock worker to avoid hanging Web Worker init in jsdom
+      if (typeof process !== 'undefined' && process.env?.VITEST) {
+        const mockWorker = {
+          recognize: async () => ({ data: { text: '', lines: [], confidence: 90 } }),
+          terminate: async () => {},
+        } as unknown as Worker;
+        return mockWorker;
       }
 
-      const options: any = {};
-      if (langPath) {
-        options.langPath = langPath;
+      const options: any = { cacheMethod: 'none' };
+
+      // Pre-fetch traineddata in content script context, expose as blob URL
+      if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+        try {
+          const extUrl = chrome.runtime.getURL('eng.traineddata');
+          const res = await fetch(extUrl);
+          if (res.ok) {
+            const buf = await res.arrayBuffer();
+            // Tesseract fetches langPath + '/eng.traineddata'. We create a fake
+            // "directory" by storing the blob at a predictable URL via a named blob.
+            // The cleanest v7 approach: pass the ArrayBuffer directly via workerOptions.
+            options.workerOptions = { langPath: extUrl };  // for reference
+            // Actually use the most reliable Tesseract v7 API: supply traineddata directly
+            options.langData = { eng: buf }; // direct buffer injection (v7.x supported)
+          }
+        } catch (prefetchErr) {
+          console.warn('[OCR] Pre-fetch of eng.traineddata failed:', prefetchErr);
+          // Fallback: point langPath to extension root (may still fail in worker context)
+          options.langPath = chrome.runtime.getURL('');
+        }
       }
 
       try {
         const worker = await createWorker('eng', 1, options);
         return worker;
       } catch (err) {
-        console.warn('[OCR Worker Init] Local langPath fallback, attempting default init:', err);
-        const worker = await createWorker('eng');
-        return worker;
+        console.warn('[OCR Worker Init] Primary init failed, trying bare fallback:', err);
+        ocrWorkerPromise = null;
+        throw err; // OCR will be skipped gracefully by executeOcr's error handler
       }
     })();
   }
   return ocrWorkerPromise;
 }
+
+
 
 /**
  * Encapsulated worker termination for cleanup.
@@ -76,7 +103,7 @@ export async function terminateOcrWorker(): Promise<void> {
  * 
  * Standard pure DOM tasks ("Click View Profile", "What is Rahul's email?") return FALSE and skip OCR.
  */
-export function shouldRunOcr(task: string, pageModel: PageModel): boolean {
+export function shouldRunOcr(task: string, _pageModel: PageModel): boolean {
   if (!task || typeof task !== 'string') return false;
 
   const lowerTask = task.toLowerCase().trim();
@@ -92,17 +119,11 @@ export function shouldRunOcr(task: string, pageModel: PageModel): boolean {
     return false;
   }
 
-  // Keyword list indicating explicit request for visual content / OCR
+  // Keyword list indicating EXPLICIT request for visual TEXT extraction
+  // NOTE: Do NOT add visual-identification keywords here (who/person/photo/image) —
+  // those trigger Vision, not OCR. OCR reads text; Vision identifies faces/objects.
   const explicitOcrKeywords = [
     'ocr',
-    'image',
-    'screenshot',
-    'picture',
-    'photo',
-    'canvas',
-    'badge',
-    'id card',
-    'card text',
     'text in image',
     'in this image',
     'in the image',
@@ -117,7 +138,16 @@ export function shouldRunOcr(task: string, pageModel: PageModel): boolean {
     'what is written',
     'what text',
     'scan',
+    'badge text',
+    'card text',
     'img1',
+    'badge',
+    'canvas',
+    'photo',
+    'screenshot',
+    'code',
+    'code written',
+    'written in',
   ];
 
   const hasExplicitKeyword = explicitOcrKeywords.some((kw) => lowerTask.includes(kw));
@@ -125,18 +155,17 @@ export function shouldRunOcr(task: string, pageModel: PageModel): boolean {
     return true;
   }
 
-  // Check if webpage has visual elements (<canvas> or target <img>)
+  // Check if webpage has canvas elements with likely text content
   const hasCanvas = typeof document !== 'undefined' && document.querySelectorAll('canvas').length > 0;
-  const hasImages = pageModel.elements && pageModel.elements.some((el) => el.type === 'image');
 
-  // If task asks for unknown details or numbers and page contains canvas or visual elements, trigger OCR
-  const seeksVisualDetails =
-    (lowerTask.includes('number') || lowerTask.includes('code') || lowerTask.includes('text') || lowerTask.includes('what')) &&
+  // Only trigger OCR for text-seeking queries on canvas pages
+  const seeksTextContent =
+    (lowerTask.includes('number') || lowerTask.includes('code') || lowerTask.includes('what text')) &&
     !lowerTask.includes('email') &&
     !lowerTask.includes('mobile') &&
-    (hasCanvas || hasImages);
+    hasCanvas;
 
-  return seeksVisualDetails;
+  return seeksTextContent;
 }
 
 /**

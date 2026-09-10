@@ -265,13 +265,41 @@ class WebpageVisualizer {
     }, durationMs);
   }
 
+  public clearAll() {
+    if (this.overlayContainer) {
+      this.overlayContainer.classList.remove('visible');
+    }
+    if (this.viewportGlow) {
+      this.viewportGlow.classList.remove('active', 'paused');
+    }
+    if (this.floatingBadge) {
+      this.floatingBadge.className = 'webpilot-floating-badge';
+    }
+    if (this.targetFrame) {
+      this.targetFrame.classList.remove('active');
+    }
+    if (this.aiCursor) {
+      this.aiCursor.classList.remove('visible');
+    }
+    if (this.scanLaser) {
+      this.scanLaser.classList.remove('active');
+    }
+    if (this.takeControlPill) {
+      this.takeControlPill.classList.remove('visible');
+    }
+    if (this.pausedBanner) {
+      this.pausedBanner.classList.remove('visible');
+    }
+
+    if (this.overlayContainer && this.overlayContainer.parentNode) {
+      this.overlayContainer.parentNode.removeChild(this.overlayContainer);
+      this.overlayContainer = null;
+      this.isInitialized = false;
+    }
+  }
+
   private handleTakeControl() {
-    this.updateBadge('PAUSED');
-    this.pausedBanner?.classList.add('visible');
-    this.viewportGlow?.classList.add('paused');
-    this.takeControlPill?.classList.remove('visible');
-    this.clearTargetHighlight();
-    this.aiCursor?.classList.remove('visible');
+    this.clearAll();
     this.onTakeControlCallback?.();
   }
 

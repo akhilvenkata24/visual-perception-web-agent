@@ -13,81 +13,104 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     // 1. Activate in-page futuristic glow & floating badge
     visualizer.setActive(true, 'OBSERVING');
-    if (message.task.toLowerCase().includes('screen') || message.task.toLowerCase().includes('image') || message.task.toLowerCase().includes('form')) {
+    if (
+      message.task.toLowerCase().includes('screen') ||
+      message.task.toLowerCase().includes('image') ||
+      message.task.toLowerCase().includes('form')
+    ) {
       visualizer.startScan('ANALYZING', 1400);
     }
+
+    // Acknowledge receipt immediately so chrome.tabs.sendMessage never times out
+    sendResponse({ status: 'ACKNOWLEDGED' });
 
     (async () => {
       try {
         const loopResult = await runAutonomousAgentLoop(message.task, {
           maxSteps: 5,
-          settlingDelayMs: 400,
+          settlingDelayMs: 800,
+          onStepProgress: (stepProgress) => {
+            // Send live progress update for each step to popup UI
+            if (stepProgress.firewallResult?.action?.element_id && stepProgress.pageModel) {
+              visualizer.updateBadge('ACTING');
+              const targetEl = resolveDOMElement(
+                stepProgress.firewallResult.action.element_id,
+                stepProgress.pageModel
+              );
+              if (targetEl && targetEl instanceof HTMLElement) {
+                visualizer.highlightTarget(targetEl, stepProgress.firewallResult.action.element_id);
+              }
+            }
+
+            chrome.runtime.sendMessage({
+              type: 'AGENT_STEP_PROGRESS',
+              task: message.task,
+              stepProgress,
+            }).catch(() => {});
+          },
         });
-
-        const lastStep = loopResult.lastStep;
-
-        // If an element was interacted with, highlight it in-situ with holographic brackets
-        if (lastStep?.firewallResult?.action?.element_id && lastStep?.pageModel) {
-          visualizer.updateBadge('ACTING');
-          const targetEl = resolveDOMElement(lastStep.firewallResult.action.element_id, lastStep.pageModel);
-          if (targetEl && targetEl instanceof HTMLElement) {
-            visualizer.highlightTarget(targetEl, lastStep.firewallResult.action.element_id);
-          }
-        }
 
         // Complete state
         visualizer.updateBadge('COMPLETE');
         setTimeout(() => {
-          visualizer.setActive(false);
-        }, 4000);
+          visualizer.clearAll();
+        }, 2000);
 
-        sendResponse({
-          status: loopResult.status,
-          task: loopResult.task,
-          totalSteps: loopResult.totalSteps,
-          finalAnswer: loopResult.finalAnswer,
-          steps: loopResult.steps,
-          error: loopResult.error,
-          // Backwards-compatible properties from the final step for existing UI panels
-          pageModelSummary: lastStep?.pageModelSummary || {
-            title: document.title,
-            elementCount: 0,
-            interactiveCount: 0,
-            sensitiveCount: 0,
-            sensitiveTypes: [],
-            intent: 'UNKNOWN',
-            decisionsSummary: { totalEntities: 0, allowCount: 0, maskCount: 0, tokenizeCount: 0, localOnlyCount: 0, blockCount: 0 },
-            sourcesRun: ['dom'],
+        const lastStep = loopResult.lastStep;
+        chrome.runtime.sendMessage({
+          type: 'AGENT_TASK_COMPLETE',
+          task: message.task,
+          loopResult: {
+            status: loopResult.status,
+            task: loopResult.task,
+            totalSteps: loopResult.totalSteps,
+            finalAnswer: loopResult.finalAnswer,
+            steps: loopResult.steps,
+            error: loopResult.error,
+            pageModelSummary: lastStep?.pageModelSummary || {
+              title: document.title,
+              elementCount: 0,
+              interactiveCount: 0,
+              sensitiveCount: 0,
+              sensitiveTypes: [],
+              intent: 'UNKNOWN',
+              decisionsSummary: { totalEntities: 0, allowCount: 0, maskCount: 0, tokenizeCount: 0, localOnlyCount: 0, blockCount: 0 },
+              sourcesRun: ['dom'],
+            },
+            pageModel: lastStep?.pageModel,
+            sensitiveEntities: lastStep?.sensitiveEntities || [],
+            privacyDecisions: lastStep?.privacyDecisions || [],
+            sanitizedContext: lastStep?.sanitizedContext,
+            sanitizedImages: lastStep?.sanitizedImages || {},
+            ocrResult: lastStep?.ocrResult,
+            agentPlanResponse: lastStep?.agentPlanResponse,
+            firewallResult: lastStep?.firewallResult,
+            executionResult: lastStep?.executionResult,
+            metrics: {
+              apiLatencyMs: loopResult.metrics.apiLatencyMs,
+              totalLatencyMs: loopResult.metrics.totalLatencyMs,
+              stepsCount: loopResult.metrics.stepsCount,
+            },
           },
-          pageModel: lastStep?.pageModel,
-          sensitiveEntities: lastStep?.sensitiveEntities || [],
-          privacyDecisions: lastStep?.privacyDecisions || [],
-          sanitizedContext: lastStep?.sanitizedContext,
-          sanitizedImages: lastStep?.sanitizedImages || {},
-          ocrResult: lastStep?.ocrResult,
-          agentPlanResponse: lastStep?.agentPlanResponse,
-          firewallResult: lastStep?.firewallResult,
-          executionResult: lastStep?.executionResult,
-          metrics: {
-            apiLatencyMs: loopResult.metrics.apiLatencyMs,
-            totalLatencyMs: loopResult.metrics.totalLatencyMs,
-            stepsCount: loopResult.metrics.stepsCount,
-          },
-        });
+        }).catch(() => {});
       } catch (err: any) {
         console.error('🚨 [Agent Loop Error]', err);
-        visualizer.setActive(false);
-        sendResponse({
-          status: 'ERROR',
+        visualizer.clearAll();
+        chrome.runtime.sendMessage({
+          type: 'AGENT_TASK_COMPLETE',
           task: message.task,
-          error: err.message || 'Unknown error occurred during agent execution loop.',
-        });
+          loopResult: {
+            status: 'ERROR',
+            task: message.task,
+            error: err.message || 'Unknown error occurred during agent execution loop.',
+          },
+        }).catch(() => {});
       }
     })();
 
-    return true; // Keep message channel open for async response
-  } else if (message.type === 'TAKE_CONTROL') {
-    visualizer.updateBadge('PAUSED');
-    sendResponse({ status: 'PAUSED' });
+    return false; // Instant response sent synchronously
+  } else if (message.type === 'TAKE_CONTROL' || message.type === 'STOP_TASK' || message.type === 'CLEANUP_OVERLAYS') {
+    visualizer.clearAll();
+    sendResponse({ status: 'CLEARED' });
   }
 });

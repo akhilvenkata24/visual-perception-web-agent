@@ -137,6 +137,8 @@ export async function runAutonomousAgentLoop(
     );
 
     // 6. Send sanitized payload & previous steps history to FastAPI / Gemini backend
+    //    NOTE: Content scripts in Chrome MV3 cannot directly fetch() to localhost.
+    //    We delegate the HTTP request to the service worker via chrome.runtime.sendMessage.
     let agentPlanResponse: any = null;
     let serverError: string | null = null;
     const apiStart = performance.now();
@@ -148,16 +150,43 @@ export async function runAutonomousAgentLoop(
         previous_steps: previousStepRecords,
       };
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let swResponse: { success: boolean; data?: any; error?: string } | null = null;
 
-      if (!res.ok) {
-        serverError = `Server HTTP ${res.status}: ${res.statusText}`;
+      if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.sendMessage === 'function') {
+        try {
+          swResponse = await new Promise<{ success: boolean; data?: any; error?: string }>(
+            (resolve) => {
+              chrome.runtime.sendMessage(
+                { type: 'CALL_AGENT_API', endpoint, payload },
+                (res) => {
+                  if (chrome.runtime.lastError) {
+                    resolve({ success: false, error: chrome.runtime.lastError.message });
+                  } else {
+                    resolve(res || { success: false, error: 'Empty response from service worker' });
+                  }
+                }
+              );
+            }
+          );
+        } catch (e: any) {
+          swResponse = null;
+        }
+      }
+
+      if (swResponse && swResponse.success && swResponse.data) {
+        agentPlanResponse = swResponse.data;
       } else {
-        agentPlanResponse = await res.json();
+        const fetchRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!fetchRes.ok) {
+          serverError = `HTTP ${fetchRes.status}: ${fetchRes.statusText}`;
+        } else {
+          agentPlanResponse = await fetchRes.json();
+        }
       }
     } catch (err: any) {
       serverError = `Connection Error to ${endpoint}: ${err.message}`;
@@ -247,6 +276,18 @@ export async function runAutonomousAgentLoop(
     // 8. Safe Browser Action Execution
     const executionResult = executeAction(firewallResult, pageModel);
 
+    // Build modalities sourcesRun tracking
+    const sourcesRun: string[] = ['dom'];
+    if (perceptionResults.ocr && perceptionResults.ocr.status !== 'skipped') {
+      sourcesRun.push('ocr');
+    }
+    if (perceptionResults.vision && perceptionResults.vision.status !== 'skipped') {
+      sourcesRun.push('vision');
+    }
+    if (sanitizedImages && Object.keys(sanitizedImages).length > 0) {
+      if (!sourcesRun.includes('vision')) sourcesRun.push('vision');
+    }
+
     const stepProgress: StepProgress = {
       stepNumber: currentStep,
       task,
@@ -263,7 +304,7 @@ export async function runAutonomousAgentLoop(
         sensitiveTypes: Array.from(new Set(sensitiveEntities.map((e) => e.type))),
         intent: classification.intent,
         decisionsSummary: sanitizedContext.decisionsSummary,
-        sourcesRun: pageModel.metadata?.sourcesRun || ['dom'],
+        sourcesRun,
       },
       pageModel,
       sensitiveEntities,
@@ -282,10 +323,51 @@ export async function runAutonomousAgentLoop(
 
     const actionTypeStr = (untrustedAction.action || '').toLowerCase().trim();
 
-    // Check if task is completed (Action 'none' or direct answer delivered)
-    if (actionTypeStr === 'none') {
-      finalAnswer = untrustedAction.answer || untrustedAction.reasoning || executionResult.message;
-      console.log(`✅ [Agent Loop] Task goal satisfied at Step ${currentStep}. Final Answer: "${finalAnswer}"`);
+    // Check if duplicate action (same action & same target element ID as immediately preceding step)
+    const lastPrevAction = previousStepRecords[previousStepRecords.length - 1];
+    const isDuplicateAction =
+      lastPrevAction &&
+      lastPrevAction.action === untrustedAction.action &&
+      lastPrevAction.element_id === untrustedAction.element_id &&
+      actionTypeStr !== 'none';
+
+    // Check if task is completed (Action 'none', duplicate action loop, or direct answer delivered)
+    if (isDuplicateAction || actionTypeStr === 'none') {
+      let resolvedAnswer = untrustedAction.answer || untrustedAction.reasoning;
+
+      // Clean up think tags if present
+      if (resolvedAnswer) {
+        resolvedAnswer = resolvedAnswer.replace(/<think>.*?<\/think>/gs, '').trim();
+      }
+
+      // If resolvedAnswer is empty, attempt structured fallback from page content (excluding nav links)
+      if (!resolvedAnswer || resolvedAnswer.trim().length === 0) {
+        const ocrTexts = perceptionResults.ocr?.data ? perceptionResults.ocr.data.map((r) => r.text).join(' ') : '';
+        const navKeywords = ['skip menu', 'log in', 'sign up', 'subscribe', 'navigation', 'search', 'menu', 'news', 'comics'];
+        const contentElements = pageModel.elements
+          .filter(
+            (e) =>
+              e.label &&
+              e.label.trim().length > 1 &&
+              !navKeywords.some((nk) => e.label.toLowerCase().includes(nk))
+          )
+          .slice(0, 10)
+          .map((e) => e.label.trim())
+          .join(' — ');
+
+        if (ocrTexts && ocrTexts.trim().length > 0) {
+          resolvedAnswer = ocrTexts;
+        } else if (contentElements && contentElements.trim().length > 0) {
+          resolvedAnswer = contentElements;
+        }
+      }
+
+      finalAnswer = resolvedAnswer || executionResult.message || 'Task completed.';
+      console.log(
+        `✅ [Agent Loop] Task satisfied at Step ${currentStep}${
+          isDuplicateAction ? ' (duplicate action loop resolved)' : ''
+        }. Final Answer: "${finalAnswer}"`
+      );
 
       const totalLatencyMs = Math.round(performance.now() - loopStartTime);
       return {

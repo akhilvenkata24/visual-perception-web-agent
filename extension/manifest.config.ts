@@ -5,9 +5,7 @@ export default defineManifest({
   name: 'WebPilot AI — Autonomous Browser Vision Agent',
   version: '1.0.0',
   description: 'Futuristic AI Web Agent with Three.js-inspired spatial visualization and context-aware privacy',
-  action: {
-    default_popup: 'index.html',
-  },
+  action: {},
   side_panel: {
     default_path: 'index.html',
   },

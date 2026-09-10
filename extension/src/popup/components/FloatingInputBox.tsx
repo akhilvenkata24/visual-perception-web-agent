@@ -5,6 +5,7 @@ interface FloatingInputBoxProps {
   value: string;
   onChange: (val: string) => void;
   onSubmit: () => void;
+  onStop?: () => void;
   isWorking: boolean;
   onCaptureScreenshot?: () => void;
 }
@@ -13,6 +14,7 @@ export const FloatingInputBox: React.FC<FloatingInputBoxProps> = ({
   value,
   onChange,
   onSubmit,
+  onStop,
   isWorking,
   onCaptureScreenshot,
 }) => {
@@ -50,42 +52,38 @@ export const FloatingInputBox: React.FC<FloatingInputBoxProps> = ({
           <button
             type="button"
             className="btn-tool-icon"
-            title="Attach file / reference context"
-            disabled={isWorking}
-          >
-            📎
-          </button>
-          <button
-            type="button"
-            className="btn-tool-icon"
             onClick={onCaptureScreenshot}
-            title="Inspect & Screenshot Viewport"
+            title="Inspect Current Page"
             disabled={isWorking}
           >
-            📸
-          </button>
-          <button
-            type="button"
-            className="btn-tool-icon"
-            title="Voice input"
-            disabled={isWorking}
-          >
-            🎤
+            📸 Inspect Page
           </button>
         </div>
 
-        <button
-          type="button"
-          className="btn-spatial-send"
-          onClick={onSubmit}
-          disabled={!value.trim() || isWorking}
-          title="Run task with WebPilot AI"
-        >
-          <div className="send-orb-container">
-            <ThreeOrbCanvas state={isWorking ? 'working' : 'ready'} size={24} interactive={false} />
-          </div>
-          <span className="send-arrow">➤</span>
-        </button>
+        {isWorking ? (
+          <button
+            type="button"
+            className="btn-spatial-stop"
+            onClick={onStop}
+            title="Stop agent action"
+          >
+            <span className="stop-icon">⏹</span>
+            <span className="stop-text">Stop</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn-spatial-send"
+            onClick={onSubmit}
+            disabled={!value.trim()}
+            title="Run task with WebPilot AI"
+          >
+            <div className="send-orb-container">
+              <ThreeOrbCanvas state="ready" size={24} interactive={false} />
+            </div>
+            <span className="send-arrow">➤</span>
+          </button>
+        )}
       </div>
     </div>
   );

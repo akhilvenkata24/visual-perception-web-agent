@@ -14,9 +14,9 @@ export interface ViewportScreenshotResult {
  */
 export async function compressScreenshot(
   dataUrl: string,
-  maxWidth = 960,
-  maxHeight = 640,
-  quality = 0.85
+  maxWidth = 480,
+  maxHeight = 360,
+  quality = 0.45
 ): Promise<{ dataUrl: string; width: number; height: number }> {
   if (typeof document === 'undefined') {
     return { dataUrl, width: maxWidth, height: maxHeight };
